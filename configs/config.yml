@@ -17,47 +17,47 @@ dataset:
     edge_dist_cutoff: 3.0
     pocket_dist: 6
     rf_threshold: 0.5
-    
+
 model:
   encoder_args:
-    in_feat: 128
+    in_feat: 128 #maybe error
     channels: 256
     dropout_rate: 0.1
     out_size: 128
     graph_args:
       in_size: 128
       hidden_size: 256
-      num_layers: 3
-      edge_feat_dim: 32
+      num_layers: 5
+      edge_feat_dim: 0
       out_size: 128
   decoder_args:
-    use_attn_prob: true
+    use_attn_prob: false
     use_attn_type: false
     prob_args:
       attn:
         in_size: 128
         embed_dim: 64
-        output_dim: 32
+        output_dim: 1
         num_heads: 8
         dropout_rate: 0.1
         num_layers: 1
       linear:
         input_dim: 128
-        output_dim: 32
-        num_layers: 2
+        output_dim: 1
+        num_layers: 5
         dropout_rate: 0.1
     type_args:
       attn:
         in_size: 128
         embed_dim: 64
-        output_dim: 32
+        output_dim: 11
         num_heads: 8
         dropout_rate: 0.1
         num_layers: 1
       linear:
         input_dim: 128
-        output_dim: 32
-        num_layers: 2
+        output_dim: 11
+        num_layers: 5
         dropout_rate: 0.1
 
 
