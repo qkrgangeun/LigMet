@@ -75,28 +75,54 @@ def process_pdb(pdb_io)->str:
     
     return temp_pdb_path
 
+class CustomClassifier(freesasa.Classifier):
+    """
+    FreeSASA의 사용자 정의 Classifier
+    - 원자의 유형을 특정 기준으로 분류
+    - 알 수 없는 원자의 반지름을 1.5Å로 설정
+    """
+    purePython = True  # 필수 설정
+
+    def classify(self, res_name: str, atom_name: str) -> str:
+        """ 원자의 유형을 분류하는 함수 """
+        if re.match(r'\s*N', atom_name): return 'Nitrogen'
+        if re.match(r'\s*C', atom_name): return 'Carbon'
+        if re.match(r'\s*O', atom_name): return 'Oxygen'
+        if re.match(r'\s*S', atom_name): return 'Sulfur'
+        return 'Unknown'  # 알 수 없는 원자
+
+    def radius(self, res_name: str, atom_name: str) -> float:
+        """ 
+        원자의 반지름을 반환하는 함수
+        - 기본적인 원소에 대한 반지름 설정
+        - 알 수 없는 원소는 1.5Å로 설정
+        """
+        if re.match(r'\s*N', atom_name): return 1.6  # Nitrogen
+        if re.match(r'\s*C', atom_name): return 1.7  # Carbon
+        if re.match(r'\s*O', atom_name): return 1.4  # Oxygen
+        if re.match(r'\s*S', atom_name): return 1.8  # Sulfur
+        return 1.5  # Unknown atoms → 1.5Å 설정
+
 def calculate_sasa(pdb_path: str) -> np.ndarray:
     """
-    Calculate SASA including ligands (HETATM) using FreeSASA and BioPython.
-    If an unknown element is encountered, assign a default radius of 1.5 Å.
+    사용자 정의 Classifier를 적용한 SASA 계산 (리간드 포함)
+    - 알 수 없는 원소 반지름을 1.5Å로 설정
     """
+    # PDB 파일을 BioPython으로 파싱
     parser = PDBParser(QUIET=True)
     structure = parser.get_structure('protein', pdb_path)
-    custom_radii = freesasa.Classifier()
-    options = {'hetatm': True, 'skip-unknown': False}  # 알 수 없는 원소도 포함
 
-    result, _, _ = freesasa.calcBioPDB(structure, classifier=custom_radii, options=options)
+    # 사용자 정의 Classifier 적용
+    classifier = CustomClassifier()
+    options = {'hetatm': True, 'skip-unknown': False}  # 리간드 포함, unknown 스킵 X
 
-    for i in range(result.nAtoms()):
-        atom_name = result.structure.atomName(i).strip()
-        res_name = result.structure.residueName(i).strip()
-        radius = result.structure.atomRadius(i)
-
-        if radius <= 0:
-            print(f"[INFO] Unknown atom detected: Residue {res_name}, Atom {atom_name} → Assigning default radius 1.5Å")
-            custom_radii.setRadius(atom_name, 1.5)
-
-    result, _, _ = freesasa.calcBioPDB(structure, classifier=custom_radii, options=options)
+    try:
+        result, sasa_classes = freesasa.calcBioPDB(structure, classifier=classifier, options=options)
+    except Exception as e:
+        print(f"[ERROR] FreeSASA 계산 중 오류 발생: {e}")
+        
+        atom_count = len(list(structure.get_atoms()))
+        return np.zeros(atom_count)  # 오류 발생 시 0 배열 반환
 
     sasa = np.array([result.atomArea(i) for i in range(result.nAtoms())]) / 50
     return sasa
