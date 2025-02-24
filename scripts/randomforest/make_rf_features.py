@@ -1,10 +1,10 @@
-from ligmet.utils.rf_features import near_lig, near_res, nearest_bb_dist, nearest_prot_carbon_dist, binned_res, parse_pdb, filter_by_biometall, RSA
+from ligmet.utils.rf.rf_features import near_lig, near_res, nearest_bb_dist, nearest_prot_carbon_dist, binned_res, parse_pdb, filter_by_biometall, RSA # type: ignore
 import numpy as np
 import pandas as pd
 import argparse
-from ligmet.utils.pdb import StructureWithGrid
-from ligmet.utils.constants import aliphatic_carbons, aromatic_carbons
-from ligmet.utils.rf.label import label_grids
+from ligmet.utils.pdb import StructureWithGrid # type: ignore
+from ligmet.utils.constants import aliphatic_carbons, aromatic_carbons # type: ignore
+from ligmet.utils.rf.label import label_grids # type: ignore
 from pathlib import Path
 def process_file(file_path, output_file):
     structure_dict = np.load(file_path, allow_pickle=True)
