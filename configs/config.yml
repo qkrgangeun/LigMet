@@ -1,0 +1,20 @@
+dataset:
+  type: "preprocessed"
+  preprocessed:
+    data_file: "/home/qkrgangeun/LigMet/data/biolip/biolip.txt"
+    features_dir: "/home/qkrgangeun/LigMet/data/biolip/DL/features"
+    rf_result_dir: "/home/qkrgangeun/LigMet/data/biolip/rf/results"
+    topk: 16
+    edge_dist_cutoff: 3.0
+    pocket_dist: 6
+    rf_threshold: 0.5
+
+  onthefly:
+    data_file: "/home/qkrgangeun/LigMet/data/biolip/biolip.txt"
+    pdb_dir: "/home/qkrgangeun/LigMet/data/biolip/pdb"
+    rf_model: "/home/qkrgangeun/LigMet/data/biolip/rf/rf_param/example.param"
+    topk: 16
+    edge_dist_cutoff: 3.0
+    pocket_dist: 6
+    rf_threshold: 0.5
+

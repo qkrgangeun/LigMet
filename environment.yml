@@ -1,0 +1,30 @@
+name: se3_113
+channels:
+  - pytorch
+  - dglteam
+  - conda-forge
+dependencies:
+  - python=3.9
+  - pytorch=1.11
+  - dgl-cuda11.3=0.9.1
+  - e3nn=0.5
+  - cudatoolkit=11.3
+  - cudatoolkit-dev=11.3
+  - mkl<2024.1
+  - rdkit=2023.9
+  - numpy
+  - scipy
+  - scikit-learn
+  - pandas
+  - matplotlib
+  - seaborn
+  - networkx
+  - biopython
+  - jupyter
+  - joblib
+  - wandb
+  - pip
+  - pip:
+    - freesasa
+    - imblearn
+    - pytorch-lightning
