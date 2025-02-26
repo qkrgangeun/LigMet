@@ -1,5 +1,4 @@
 dataset:
-  type: "preprocessed"
   preprocessed:
     data_file: "/home/qkrgangeun/LigMet/data/biolip/biolip.txt"
     features_dir: "/home/qkrgangeun/LigMet/data/biolip/DL/features"
@@ -18,46 +17,78 @@ dataset:
     pocket_dist: 6
     rf_threshold: 0.5
 
+train_loader_params:
+  batch_size: 32
+  num_workers: 4
+  shuffle: True
+  pin_memory: True
+
+val_loader_params:
+  batch_size: 32
+  num_workers: 4
+  shuffle: False
+  pin_memory: True
+
 model:
-  encoder_args:
-    in_feat: 128 #maybe error
-    channels: 256
-    dropout_rate: 0.1
-    out_size: 128
-    graph_args:
-      in_size: 128
-      hidden_size: 256
-      num_layers: 5
-      edge_feat_dim: 0
+  model: "ligmet.models.Model"
+  model_config:
+    encoder_args:
+      in_feat: 128
+      channels: 256
+      dropout_rate: 0.1
       out_size: 128
-  decoder_args:
-    use_attn_prob: false
-    use_attn_type: false
-    prob_args:
-      attn:
+      graph_args:
         in_size: 128
-        embed_dim: 64
-        output_dim: 1
-        num_heads: 8
-        dropout_rate: 0.1
-        num_layers: 1
-      linear:
-        input_dim: 128
-        output_dim: 1
+        hidden_size: 256
         num_layers: 5
-        dropout_rate: 0.1
-    type_args:
-      attn:
-        in_size: 128
-        embed_dim: 64
-        output_dim: 11
-        num_heads: 8
-        dropout_rate: 0.1
-        num_layers: 1
-      linear:
-        input_dim: 128
-        output_dim: 11
-        num_layers: 5
-        dropout_rate: 0.1
+        edge_feat_dim: 0
+        out_size: 128
+    decoder_args:
+      use_attn_prob: false
+      use_attn_type: false
+      prob_args:
+        attn:
+          in_size: 128
+          embed_dim: 64
+          output_dim: 1
+          num_heads: 8
+          dropout_rate: 0.1
+          num_layers: 1
+        linear:
+          input_dim: 128
+          output_dim: 1
+          num_layers: 5
+          dropout_rate: 0.1
+      type_args:
+        attn:
+          in_size: 128
+          embed_dim: 64
+          output_dim: 11
+          num_heads: 8
+          dropout_rate: 0.1
+          num_layers: 1
+        linear:
+          input_dim: 128
+          output_dim: 11
+          num_layers: 5
+          dropout_rate: 0.1
 
-
+trainer:
+  max_epochs: 100
+  accelerator: "gpu"
+  devices: 1
+  enable_progress_bar: True
+  detect_anomaly: True
+  logger:
+    class_path: lightning.pytorch.loggers.WandbLogger
+    init_args:
+      project: "LigMet"
+      name: "ligmet_model"
+  callbacks:
+    model_checkpoint:
+      class_path: lightning.pytorch.callbacks.ModelCheckpoint
+      init_args:
+        monitor: "val_loss"
+        mode: "min"
+        save_top_k: 1
+        save_last: True
