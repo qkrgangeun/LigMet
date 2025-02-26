@@ -3,7 +3,6 @@ import torch.nn as nn # type: ignore
 import dgl # type: ignore
 import pytorch_lightning as pl # type: ignore
 from dgl.nn.pytorch.conv import EGNNConv # type: ignore
-from pytorch_lightning.utilities.cli import LightningCLI, SaveConfigCallback # type: ignore
 from typing import Dict, Tuple
 
 
@@ -133,7 +132,7 @@ class GraphDecoder(nn.Module):
         return prob_prediction, type_prediction, binning_prediction
 
 
-class LigandInteractionModel(pl.LightningModule):
+class Model(pl.LightningModule):
     """
     PyTorch Lightning module for ligand interaction prediction.
     """
@@ -146,7 +145,3 @@ class LigandInteractionModel(pl.LightningModule):
         node_features, edge_features = self.encoder(graph)
         prob_prediction, type_prediction, binning_prediction = self.decoder(node_features)
         return prob_prediction, type_prediction, binning_prediction
-
-
-if __name__ == "__main__":
-    LightningCLI(LigandInteractionModel, save_config_callback=SaveConfigCallback(dirpath='',filename=''))
