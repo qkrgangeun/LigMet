@@ -1,5 +1,5 @@
-from ligmet.utils.grid import sasa_grids, filter_by_clashmap
-from ligmet.utils.pdb import read_pdb
+from ligmet.utils.grid import sasa_grids, filter_by_clashmap # type: ignore
+from ligmet.utils.pdb import read_pdb # type: ignore
 import os
 from dataclasses import asdict
 import numpy as np

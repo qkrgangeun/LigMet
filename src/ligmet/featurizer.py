@@ -46,6 +46,31 @@ class Info():
     metal_positions: torch.Tensor # [m, 3]
     metal_types: torch.Tensor # [m]
 
+# def make_pdb(protein: StructureWithGrid) -> tuple[io.StringIO, io.StringIO, io.StringIO]:
+#     pdb_io = io.StringIO()
+#     protein_io = io.StringIO()
+#     ligand_io = io.StringIO()
+
+#     for idx, (chain_id, res_idx, res_name, atom_name, atom_pos, atom_elem, is_lig) in enumerate(zip(
+#             protein.chain_ids, protein.residue_idxs, protein.atom_residues, protein.atom_names, 
+#             protein.atom_positions, protein.atom_elements, protein.is_ligand)):
+        
+#         # 🔹 res_idx에서 숫자 부분만 추출 (Insertion Code 제거)
+#         res_idx_clean = int(''.join(filter(str.isdigit, str(res_idx)))) if any(c.isdigit() for c in str(res_idx)) else res_idx
+    
+#         pdb_line = f"{'HETATM' if is_lig else 'ATOM  '}{idx+1:5d}  {atom_name:<3} {res_name:>3} {chain_id:>1}{res_idx_clean:>4d}    {atom_pos[0]:8.3f}{atom_pos[1]:8.3f}{atom_pos[2]:8.3f}  1.00  0.00          {atom_elem:>2}\n"
+#         pdb_io.write(pdb_line)
+
+#         if is_lig:
+#             ligand_io.write(pdb_line)
+#         else:
+#             protein_io.write(pdb_line)
+
+#     pdb_io.seek(0)
+#     protein_io.seek(0)
+#     ligand_io.seek(0)
+#     return pdb_io, protein_io, ligand_io
+
 def make_pdb(protein: StructureWithGrid) -> tuple[io.StringIO, io.StringIO, io.StringIO]:
     pdb_io = io.StringIO()
     protein_io = io.StringIO()
@@ -54,7 +79,46 @@ def make_pdb(protein: StructureWithGrid) -> tuple[io.StringIO, io.StringIO, io.S
     for idx, (chain_id, res_idx, res_name, atom_name, atom_pos, atom_elem, is_lig) in enumerate(zip(
             protein.chain_ids, protein.residue_idxs, protein.atom_residues, protein.atom_names, 
             protein.atom_positions, protein.atom_elements, protein.is_ligand)):
-        pdb_line = f"{'HETATM' if is_lig else 'ATOM  '}{idx+1:5d}  {atom_name:<3} {res_name:>3} {chain_id:>1}{res_idx:>4d}    {atom_pos[0]:8.3f}{atom_pos[1]:8.3f}{atom_pos[2]:8.3f}  1.00  0.00          {atom_elem:>2}\n"
+
+        try:
+            # 🔹 res_idx에서 숫자 부분만 추출, 숫자가 없으면 0으로 설정
+            res_idx_clean = int(''.join(filter(str.isdigit, str(res_idx)))) if any(c.isdigit() for c in str(res_idx)) else 0
+        except ValueError as e:
+            print(f"⚠️ [ERROR] res_idx 변환 실패: {res_idx} (chain_id: {chain_id}, res_name: {res_name})")
+            raise e
+
+ # 🔹 원자명 정렬 (PDB 규칙 적용)
+        if len(atom_name) == 1:   # 'C', 'O', 'N' 같은 원자 1개짜리
+            atom_name_fixed = f" {atom_name:<3}"  # 오른쪽 정렬
+        elif len(atom_name) == 2: # 'NA', 'MG' 같은 원자 2개짜리
+            atom_name_fixed = f" {atom_name:<2} " # 중간 정렬
+        elif len(atom_name) == 3: # 'OXT', 'CLF' 같은 원자 3개짜리
+            atom_name_fixed = f"{atom_name:<3} " # 왼쪽 정렬
+        else:                      # 'SD1', 'Cα' 같은 4자리 원자명
+            atom_name_fixed = f"{atom_name[:4]}" # 그대로 유지
+            
+        # 🔹 PDB Format에 맞춘 정렬 (공백 조정)
+        pdb_line = (
+            f"{'HETATM' if is_lig else 'ATOM  '}"  # Record Type (1-6)
+            f"{idx+1:5d} "                         # Atom Serial Number (7-11, 우측 정렬)
+            f"{atom_name_fixed:<4}"                 # Atom Name (13-16, 좌측 정렬)
+            f" "                                    # Alternate Location (17, 공백)
+            f"{res_name:>3} "                       # Residue Name (18-20, 우측 정렬)
+            f"{chain_id:>1}"                        # Chain Identifier (22)
+            f"{res_idx_clean:>4d}"                  # Residue Sequence Number (23-26, 우측 정렬)
+            f" "                                    # Insertion Code (27, 공백)
+            f"   "                                  # Unused Columns (28-30, 공백)
+            f"{atom_pos[0]:8.3f}"                   # X Coordinate (31-38, 우측 정렬)
+            f"{atom_pos[1]:8.3f}"                   # Y Coordinate (39-46, 우측 정렬)
+            f"{atom_pos[2]:8.3f}"                   # Z Coordinate (47-54, 우측 정렬)
+            f"  1.00"                               # Occupancy (55-60, 우측 정렬, 기본값 1.00)
+            f"  0.00"                               # Temperature Factor (61-66, 우측 정렬, 기본값 0.00)
+            f"          "                          # Segment Identifier (73-76, 공백)
+            f"{atom_elem:>2}"                       # Element Symbol (77-78, 우측 정렬)
+            f"  "                                   # Charge (79-80, 공백)
+            f"\n"
+        )
+
         pdb_io.write(pdb_line)
 
         if is_lig:
@@ -66,6 +130,8 @@ def make_pdb(protein: StructureWithGrid) -> tuple[io.StringIO, io.StringIO, io.S
     protein_io.seek(0)
     ligand_io.seek(0)
     return pdb_io, protein_io, ligand_io
+
+
 
 def process_pdb(pdb_io)->str:
     with tempfile.NamedTemporaryFile(suffix=".pdb", mode="w", delete=False) as temp_pdb:
@@ -127,29 +193,56 @@ def calculate_sasa(pdb_path: str) -> np.ndarray:
     sasa = np.array([result.atomArea(i) for i in range(result.nAtoms())]) / 50
     return sasa
 
-def q_per_atom(ligand_mol, structure:StructureWithGrid):
+import numpy as np
+import torch
+from rdkit.Chem import AllChem
+
+def q_per_atom(ligand_mol, structure: StructureWithGrid):
     ligand_mask = structure.is_ligand == 1
     protein_mask = ~ligand_mask
     qs = np.zeros(len(structure.atom_names))
+
+    # 단백질 부분 전하 계산
     prot_qs = [
         partial_q[res][atom] if res in partial_q and atom in partial_q[res]
+        else partial_q[atom] if atom == "OXT"
         else (print(f"Missing charge data for Residue: {res}, Atom: {atom}") or 0.0)
         for res, atom in zip(structure.atom_residues[protein_mask], structure.atom_names[protein_mask])
     ]
 
+    # 리간드 부분 전하 계산
     ligand_qs = []
-
     if ligand_mol is not None:
         AllChem.ComputeGasteigerCharges(ligand_mol)
         ligand_qs = [
             atom.GetDoubleProp("_GasteigerCharge") for atom in ligand_mol.GetAtoms()
         ]
-    else: 
-        ligand_qs = [0.0]*np.sum(ligand_mask)
-        
-    qs[np.where(protein_mask)] = np.array(prot_qs)  
-    qs[np.where(ligand_mask)] = np.array(ligand_qs)
+    else:
+        ligand_qs = [0.0] * np.sum(ligand_mask)
+
+    # numpy 배열 변환
+    prot_qs = np.array(prot_qs, dtype=np.float32)
+    ligand_qs = np.array(ligand_qs, dtype=np.float32)
+
+    # NaN 및 Inf 값 확인 및 변환
+    prot_qs = np.nan_to_num(prot_qs, nan=0.0, posinf=0.0, neginf=0.0)
+    ligand_qs = np.nan_to_num(ligand_qs, nan=0.0, posinf=0.0, neginf=0.0)
+
+    # qs 업데이트
+    qs[np.where(protein_mask)] = prot_qs
+    qs[np.where(ligand_mask)] = ligand_qs
+
+    # NaN 체크 및 출력
+    print(f"NaN in prot_qs: {np.isnan(prot_qs).sum()}")
+    print(f"NaN in ligand_qs: {np.isnan(ligand_qs).sum()}")
+    print(f"Inf in prot_qs: {np.isinf(prot_qs).sum()}")
+    print(f"Inf in ligand_qs: {np.isinf(ligand_qs).sum()}")
+
+    if np.isnan(ligand_qs).sum() > 0 or np.isinf(ligand_qs).sum() > 0:
+        print("Invalid values in ligand_qs:", ligand_qs)
+
     return qs
+
 
 def secondary_struct(pdb_path: str,structure) -> np.ndarray:
     parser = PDBParser()
@@ -239,20 +332,20 @@ def make_gentype(structure:Features, ligand_mol):
 def make_features(pdb_path: Optional[str], structure:StructureWithGrid) -> Features:
     # structure = np.load(structure_path, allow_pickle=True).item()
     # assert isinstance(structure, StructureWithGrid), "structure must be an instance of StructureWithGrid"
-
+    print('pdb_path',pdb_path)
     pdb_io, protein_io, ligand_io = make_pdb(structure)
-    
+    # print(pdb_io.getvalue())
     ligand_pdb_str = ligand_io.getvalue()
     ligand_mol = None
     if ligand_pdb_str.strip():
         ligand_mol = Chem.MolFromPDBBlock(ligand_pdb_str, removeHs=False)
-    pdb_path = process_pdb(pdb_io)
+    new_pdb_path = process_pdb(pdb_io)
     # Feature 계산
-    sasa = calculate_sasa(pdb_path)  
+    sasas = calculate_sasa(new_pdb_path)  
     qs = q_per_atom(ligand_mol, structure)
-    sec_structs = secondary_struct(pdb_path, structure)  
+    sec_structs = secondary_struct(new_pdb_path, structure)  
     bond_masks = cov_bonds_mask(structure, ligand_mol)
-    gen_type = make_gentype(structure, ligand_mol)
+    gen_types = make_gentype(structure, ligand_mol)
 
     # Features 객체 반환
     features = Features(
@@ -266,8 +359,8 @@ def make_features(pdb_path: Optional[str], structure:StructureWithGrid) -> Featu
         metal_positions=structure.metal_positions,
         metal_types=structure.metal_types,
         grid_positions=structure.grid_positions,
-        gen_types=gen_type,
-        sasas=sasa,
+        gen_types=gen_types,
+        sasas=sasas,
         qs=qs,
         sec_structs=sec_structs,
         bond_masks=bond_masks

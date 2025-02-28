@@ -1,0 +1,69 @@
+dataset_type: onthefly
+model: !!python/name:ligmet.models.Model ''
+model_config:
+  decoder_args:
+    prob_transform_args:
+      attention:
+        dropout_rate: 0.1
+        embed_dim: 64
+        input_dim: 128
+        num_heads: 8
+        num_layers: 1
+        output_dim: 1
+      linear:
+        dropout_rate: 0.1
+        input_dim: 128
+        num_layers: 5
+        output_dim: 1
+    type_transform_args:
+      attention:
+        dropout_rate: 0.1
+        embed_dim: 64
+        input_dim: 128
+        num_heads: 8
+        num_layers: 1
+        output_dim: 11
+      linear:
+        dropout_rate: 0.1
+        input_dim: 128
+        num_layers: 5
+        output_dim: 11
+    use_attention_prob: false
+    use_attention_type: false
+  encoder_args:
+    dropout_rate: 0.1
+    egnn_args:
+      edge_feat_dim: 0
+      hidden_dim: 256
+      input_dim: 128
+      num_layers: 5
+      output_dim: 128
+    hidden_dim: 256
+    input_dim: 128
+    output_dim: 128
+onthefly:
+  data_file: /home/qkrgangeun/LigMet/code/src/ligmet/utils/examples/example.txt
+  edge_dist_cutoff: 3.0
+  pdb_dir: /home/qkrgangeun/LigMet/code/src/ligmet/utils/examples
+  pocket_dist: 6
+  rf_model: /home/qkrgangeun/LigMet/data/biolip/rf/rf_param/example.param
+  rf_threshold: 0.5
+  topk: 16
+preprocessed:
+  data_file: /home/qkrgangeun/LigMet/data/biolip/biolip.txt
+  edge_dist_cutoff: 3.0
+  features_dir: /home/qkrgangeun/LigMet/data/biolip/DL/features
+  pocket_dist: 6
+  rf_result_dir: /home/qkrgangeun/LigMet/data/biolip/rf/results
+  rf_threshold: 0.5
+  topk: 16
+train_loader_params:
+  batch_size: 32
+  num_workers: 4
+  pin_memory: true
+  shuffle: true
+val_loader_params:
+  batch_size: 32
+  num_workers: 4
+  pin_memory: true
+  shuffle: false

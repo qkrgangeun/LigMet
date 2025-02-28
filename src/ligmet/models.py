@@ -40,11 +40,11 @@ class NodeFeatureEncoder(nn.Module):
     def __init__(self, input_dim, hidden_dim, dropout_rate, output_dim, egnn_args):
         super().__init__()
         self.initial_embedding = nn.Sequential(
-            nn.Linear(input_dim, hidden_dim),
+            nn.Linear(input_dim, hidden_dim, bias=False),
             nn.LayerNorm(hidden_dim),
             nn.GELU(),
             nn.Dropout(dropout_rate),
-            nn.Linear(hidden_dim, output_dim),
+            nn.Linear(hidden_dim, output_dim, bias=False),
             nn.LayerNorm(output_dim),
             nn.GELU(),
             nn.Dropout(dropout_rate)
@@ -113,12 +113,12 @@ class GraphDecoder(nn.Module):
     """
     Decoder module for predicting probability, class type, and binning information.
     """
-    def __init__(self, use_attention_prob, use_attention_type, prob_transform_args, type_transform_args):
+    def __init__(self, use_attention_prob, use_attention_type, binning_layer_args, prob_transform_args, type_transform_args):
         super().__init__()
         self.prob_transform = self._select_transform(prob_transform_args, use_attention_prob)
         self.type_transform = self._select_transform(type_transform_args, use_attention_type)
-        self.binning_layer = nn.Linear(32, 3)  # Predicts 3-bin classification
-
+        self.binning_layer = LinearFeatureTransform(**binning_layer_args) 
+    
     @staticmethod
     def _select_transform(args, use_attention):
         if use_attention:
@@ -132,6 +132,8 @@ class GraphDecoder(nn.Module):
         return prob_prediction, type_prediction, binning_prediction
 
 
+import torch
+
 class Model(pl.LightningModule):
     """
     PyTorch Lightning module for ligand interaction prediction.
@@ -142,6 +144,20 @@ class Model(pl.LightningModule):
         self.decoder = GraphDecoder(**decoder_args)
 
     def forward(self, graph: dgl.DGLGraph):
+        # 인코더 실행
         node_features, edge_features = self.encoder(graph)
+
+        # NaN 값 확인
+        print(f"NaN in node_features: {torch.isnan(node_features).sum().item()}")
+        print(f"NaN in edge_features: {torch.isnan(edge_features).sum().item()}")
+
+        # 디코더 실행
         prob_prediction, type_prediction, binning_prediction = self.decoder(node_features)
+
+        # NaN 값 확인
+        print(f"NaN in prob_prediction: {torch.isnan(prob_prediction).sum().item()}")
+        print(f"NaN in type_prediction: {torch.isnan(type_prediction).sum().item()}")
+        print(f"NaN in binning_prediction: {torch.isnan(binning_prediction).sum().item()}")
+
         return prob_prediction, type_prediction, binning_prediction
+

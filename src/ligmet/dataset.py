@@ -8,9 +8,9 @@ from typing import Tuple, Union
 from ligmet.featurizer import Features, Info, make_features # type: ignore
 from ligmet.utils.constants import metals, standard_residues,ATOMIC_NUMBERS, atype2num,sec_struct_dict, sybyl_type_dict  # type: ignore
 from ligmet.utils.pdb import read_pdb, StructureWithGrid
-from ligmet.utils.grid import sasa_grids, filter_by_clashmap
+from ligmet.utils.grid import sasa_grids_thread, filter_by_clashmap
 from dataclasses import asdict
-
+import math
 class PreprocessedDataSet(torch.utils.data.Dataset):
     def __init__(self, data_file: str, features_dir: str, rf_result_dir: str,topk: int, edge_dist_cutoff: float, pocket_dist: float, rf_threshold: float, eps=1e-6):
         super().__init__()
@@ -23,7 +23,7 @@ class PreprocessedDataSet(torch.utils.data.Dataset):
         self.rf_threshold=rf_threshold
         self.pdbid_lists=[pdb.strip().split(".pdb")[0] for pdb in open(data_file)]
         self.eps = eps
-        self.alpha = 5.78
+        self.alpha = 4/math.log(2) #5.77078
         
     def __len__(self):
         return len(self.pdbid_lists)
@@ -35,22 +35,7 @@ class PreprocessedDataSet(torch.utils.data.Dataset):
         feature_path = self.features_dir / f"{pdb_id}.npz"
         rf_result_path = self.rf_result_dir / f"{pdb_id}.npz"
         data = np.load(feature_path,allow_pickle=True)
-        features = Features(
-            atom_positions=data['atom_positions'],
-            atom_names=data['atom_names'],
-            atom_elements=data['atom_elements'],
-            atom_residues=data['atom_residues'],
-            residue_idxs=data['residue_idxs'],
-            chain_ids=data['chain_ids'],
-            is_ligand=data['is_ligand'],
-            metal_positions=data['metal_positions'],
-            metal_types=data['metal_types'],
-            grid_positions=data['grid_positions'],
-            sasas=data['sasa'],
-            qs=data['qs'],
-            sec_structs=data['sec_structs'],
-            bond_masks=data['bond_masks']
-        )
+        features = Features(**data)
         grid_positions = features.grid_positions
         grid_probs = np.load(rf_result_path)
         grid_mask = grid_probs >= self.rf_threshold
@@ -78,22 +63,23 @@ class PreprocessedDataSet(torch.utils.data.Dataset):
     def find_pocket(self, features: Features, grids: np.ndarray):
         c_grids = grids
         atom_pos = features.atom_positions
-
+        size = len(features.metal_positions)
+        random_int = np.random.choice(len(grids), size=size, replace=False)
+        combined_positions = np.vstack([c_grids[random_int], features.metal_positions])
+        rtree = cKDTree(combined_positions)
+        mtree = cKDTree(features.metal_positions)
         gtree = cKDTree(c_grids)
         ptree = cKDTree(atom_pos)
-        ii = gtree.query_ball_tree(ptree, self.pocket_dist)
-
+        all_positions = np.vstack([features.atom_positions,grids])
+        tree = cKDTree(all_positions)
+        # ii = gtree.query_ball_tree(ptree, self.pocket_dist)
+        ii = rtree.query_ball_tree(ptree, self.pocket_dist)
+        jj = rtree.query_ball_tree(gtree, self.pocket_dist)
         idx = np.unique(np.concatenate([i for i in ii if i], axis=0)).astype(int)
+        jdx = np.unique(np.concatenate([j for j in jj if j], axis=0)).astype(int)
         if len(idx) == 0:
             return None, False
-        print('max(idx)',max(idx))
-        print("len(features.sasas)",len(features.sasas))
-        print("len(atom_names)",len(features.atom_names))
-        print("len(qs)",len(features.qs))
-        print("len(sec_structs)",len(features.sec_structs))
-        print("len(gen_types)",len(features.gen_types))
-        print("len(bond_masks)",len(features.bond_masks))
-        print("len(is_ligand == 1)",sum(features.is_ligand==1))
+
         c_features = Features(
             atom_positions=atom_pos[idx],
             atom_names=features.atom_names[idx],
@@ -104,7 +90,7 @@ class PreprocessedDataSet(torch.utils.data.Dataset):
             is_ligand=features.is_ligand[idx],
             metal_positions=features.metal_positions, 
             metal_types=features.metal_types,
-            grid_positions=c_grids,
+            grid_positions=c_grids[jdx],
             sasas=features.sasas[idx],
             qs=features.qs[idx],
             sec_structs=features.sec_structs[idx],
@@ -149,7 +135,10 @@ class PreprocessedDataSet(torch.utils.data.Dataset):
         G.ndata["grid_mask"] = grid_mask.to(torch.float32)
         G.edata["L0"] = e_feats.to(torch.float32)
         G.edata["L1"] = rel_vec.to(torch.float32)
-        
+        print('graph node개수:',len(xyz))
+        print('graph protein node개수:', len(features.atom_positions))
+        print('graph grid node개수:',len(features.grid_positions))
+        print('graph edge개수:',len(e_feats))
         return G
     
     def make_polarity_vector(self, features: Features) -> np.ndarray:
@@ -193,7 +182,6 @@ class PreprocessedDataSet(torch.utils.data.Dataset):
         
         grids_2nd = torch.ones(num_grids) * len(sec_struct_dict)
         sec_structs = torch.cat([sec_structs, grids_2nd])
-        print(sec_structs)
         # one-hot encoding
         aatype = F.one_hot(aatype.to(torch.int64), num_classes=len(standard_residues) + 2)
         atomtype = F.one_hot(atomtype.to(torch.int64), num_classes=len(ATOMIC_NUMBERS) + 2)
@@ -208,21 +196,18 @@ class PreprocessedDataSet(torch.utils.data.Dataset):
         grids_feat = torch.zeros(num_grids)
         sasas = torch.cat((sasas, grids_feat)).unsqueeze(-1)
         qs = torch.cat((qs, grids_feat)).unsqueeze(-1)
-        # sasas can have nan value
         sasas = sasas + self.eps
 
         n_feats = torch.cat(
             [aatype, atomtype, atom_chemtype, sec_structs, sasas, qs], dim=1
         )
-        print(
-            "aatype, atomtype, atom_chemtype, sec-str, sasas, qs)",
-            aatype.shape,
-            atomtype.shape,
-            atom_chemtype.shape,
-            sec_structs.shape,
-            sasas.shape,
-            qs.shape,
-        )
+        print(f"NaN in sasas: {torch.isnan(sasas).sum().item()}")
+        print(f"NaN in qs: {torch.isnan(qs).sum().item()}")
+        print(f"NaN in features.qs: {torch.isnan(torch.tensor(features.qs)).sum().item()}")
+        print(f"NaN in sec_structs: {torch.isnan(sec_structs).sum().item()}")
+        print(f"NaN in atom_gentype: {torch.isnan(atom_chemtype).sum().item()}")
+        print(f"NaN in aatype: {torch.isnan(aatype).sum().item()}")
+        print(f"NaN in atomtype: {torch.isnan(atomtype).sum().item()}")
         polarity_vectors = self.make_polarity_vector(features)
         polarity_vectors = torch.tensor(polarity_vectors)
         return n_feats, polarity_vectors
@@ -379,17 +364,11 @@ class PreprocessedDataSet(torch.utils.data.Dataset):
             + self.eps
         )
         e_feats = torch.cat([onehot_type, dist_bin, covalent_bond, cos, sin], dim=1)
-        print(
-            "--",
-            onehot_type.shape,
-            dist_bin.shape,
-            covalent_bond.shape,
-            cos.shape,
-            sin.shape,
-        )
-        return edge_index_src, edge_index_dst, e_feats, e_vec
 
-    def collate(self, samples: list) -> Tuple[dgl.DGLGraph, torch.Tensor, Info]:
+        return edge_index_src, edge_index_dst, e_feats, e_vec
+    
+    @staticmethod
+    def collate(samples: list) -> Tuple[dgl.DGLGraph, torch.Tensor, Info]:
         graphs, labels, g_pos, m_pos, m_types, pdb_ids = [], [], [], [], [], []
 
         for G, L, info in samples:
@@ -433,7 +412,7 @@ class OnTheFlyDataSet(PreprocessedDataSet):
         pdb_path = self.pdb_dir / f'{pdb_id}.pdb'
         
         structure = read_pdb(pdb_path)
-        grids = sasa_grids(structure.atom_positions, structure.atom_elements)
+        grids = sasa_grids_thread(structure.atom_positions, structure.atom_elements)
         grids = filter_by_clashmap(grids)
         structure_dict = asdict(structure)
         structure_with_grid = StructureWithGrid(
@@ -442,6 +421,8 @@ class OnTheFlyDataSet(PreprocessedDataSet):
         )
         features = make_features(pdb_path, structure_with_grid)
         grid_positions = features.grid_positions
+        print('원래 protein개수:', len(structure.atom_positions))
+        print('원래 grid개수:',len(grids))
         
         # Randomforest prediction # 
         # grid_probs = np.load(rf_result_path)

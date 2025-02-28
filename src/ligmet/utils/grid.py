@@ -2,6 +2,8 @@ import numpy as np
 import scipy
 import scipy.spatial
 from multiprocessing import Pool
+from multiprocessing.pool import ThreadPool  # 변경된 부분
+
 def compute_sasa_for_atom(args):
     i, neigh, center, radius, xyz, radii, probe_radius, n_samples, pts0 = args
 
@@ -48,6 +50,52 @@ def sasa_grids(atom_coords, atom_elems, probe_radius=0.4, n_samples=20, num_proc
 
     # 각 원자에 대한 작업을 병렬로 수행
     with Pool(processes=num_processes) as pool:
+        results = pool.map(
+            compute_sasa_for_atom,
+            [
+                (i, neigh, center, radius, atom_coords, radii, probe_radius, n_samples, pts0)
+                for i, (neigh, center, radius) in enumerate(zip(neighs, centers, radii))
+            ],
+        )
+
+    # 결과를 병합
+    pts_out = np.concatenate(results)
+
+    return pts_out
+
+def sasa_grids_thread(atom_coords, atom_elems, probe_radius=0.4, n_samples=20, num_processes=4):
+    atomic_radii = {
+        "C": 2.0,
+        "N": 1.5 * 0.8,
+        "O": 1.4 * 0.8,
+        "S": 1.85 * 0.8,
+        "H": 0.0,
+        "F": 1.47,
+        "Cl": 1.75,
+        "Br": 1.85,
+        "I": 2.0,
+        "P": 1.8,
+    }
+    centers = atom_coords
+    radii = np.array([atomic_radii.get(e, 2.0) for e in atom_elems if e in atom_elems])
+    inc = np.pi * (3 - np.sqrt(5))  # increment
+    off = 2.0 / (n_samples // 2)
+    pts0 = []
+    
+    for k in range(n_samples // 2):
+        phi = k * inc
+        y = k * off - 1 + (off / 2)
+        r1 = np.sqrt(1 - y * y)
+        r2 = 2 * np.sqrt(1 - y * y)
+        pts0.append([np.cos(phi) * r1, y, np.sin(phi) * r1])
+        pts0.append([np.cos(phi) * r2, y, np.sin(phi) * r2])
+
+    pts0 = np.array(pts0)
+    kd = scipy.spatial.cKDTree(atom_coords)
+    neighs = kd.query_ball_tree(kd, 8.0)
+
+    # 각 원자에 대한 작업을 병렬로 수행 (ThreadPool 사용)
+    with ThreadPool(processes=num_processes) as pool:  # 변경된 부분
         results = pool.map(
             compute_sasa_for_atom,
             [
