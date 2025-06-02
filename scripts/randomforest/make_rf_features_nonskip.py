@@ -99,9 +99,9 @@ def main():
     output_dir = Path(args.output_dir) if args.output_dir else file_dir.parent / 'rf_features'
     output_path = output_dir / f'{pdb_id}.csv.gz'
     output_dir.mkdir(parents=True, exist_ok=True)
-    if output_path.exists():
-        print(f"Output already exists at {output_path}. Skipping processing.")
-        return
+    # if output_path.exists():
+    #     print(f"Output already exists at {output_path}. Skipping processing.")
+    #     return
     
     process_file(input_path, output_path)
     print("Processing complete. Data saved to", output_path)

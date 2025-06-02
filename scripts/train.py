@@ -5,7 +5,7 @@ def main():
     cli = LightningCLI(
         LigMetModel, 
         LigMetDataModule,
-        save_config_kwargs={"overwrite": True},  
+        save_config_kwargs={"overwrite": True}
     )
 
 
