@@ -1,0 +1,40 @@
+File not found: /home/qkrgangeun/LigMet/data/biolip/dl/features/1kqs.npz
+File not found: /home/qkrgangeun/LigMet/data/biolip/dl/features/1k9m.npz
+File not found: /home/qkrgangeun/LigMet/data/biolip/dl/features/1k8a.npz
+File not found: /home/qkrgangeun/LigMet/data/biolip/dl/features/1kd1.npz
+Broken file: /home/qkrgangeun/LigMet/data/biolip/dl/features/1htq.npz - File is not a zip file
+File not found: /home/qkrgangeun/LigMet/data/biolip/dl/features/1m90.npz
+Broken file: /home/qkrgangeun/LigMet/data/biolip/dl/features/1n32.npz - File is not a zip file
+File not found: /home/qkrgangeun/LigMet/data/biolip/dl/features/1k73.npz
+File not found: /home/qkrgangeun/LigMet/data/biolip/dl/features/1kc8.npz
+File not found: /home/qkrgangeun/LigMet/data/biolip/dl/features/1nji.npz
+Broken file: /home/qkrgangeun/LigMet/data/biolip/dl/features/1n8r.npz - File is not a zip file
+File not found: /home/qkrgangeun/LigMet/data/biolip/dl/features/1q86.npz
+File not found: /home/qkrgangeun/LigMet/data/biolip/dl/features/1q81.npz
+File not found: /home/qkrgangeun/LigMet/data/biolip/dl/features/1q7y.npz
+File not found: /home/qkrgangeun/LigMet/data/biolip/dl/features/1q82.npz
+File not found: /home/qkrgangeun/LigMet/data/biolip/dl/features/1s72.npz
+File not found: /home/qkrgangeun/LigMet/data/biolip/dl/features/1tzn.npz
+Broken file: /home/qkrgangeun/LigMet/data/biolip/dl/features/1w2b.npz - File is not a zip file
+File not found: /home/qkrgangeun/LigMet/data/biolip/dl/features/1yjn.npz
+File not found: /home/qkrgangeun/LigMet/data/biolip/dl/features/1yit.npz
+File not found: /home/qkrgangeun/LigMet/data/biolip/dl/features/1yjw.npz
+File not found: /home/qkrgangeun/LigMet/data/biolip/dl/features/1yhq.npz
+File not found: /home/qkrgangeun/LigMet/data/biolip/dl/features/1yj9.npz
+File not found: /home/qkrgangeun/LigMet/data/biolip/dl/features/1yi2.npz
+Broken file: /home/qkrgangeun/LigMet/data/biolip/dl/features/1xfy.npz - File is not a zip file
+Broken file: /home/qkrgangeun/LigMet/data/biolip/dl/features/2a6e.npz - File is not a zip file
+Broken file: /home/qkrgangeun/LigMet/data/biolip/dl/features/1vqn.npz - File is not a zip file
+File not found: /home/qkrgangeun/LigMet/data/biolip/dl/features/1vqo.npz
+File not found: /home/qkrgangeun/LigMet/data/biolip/dl/features/1vq5.npz
+File not found: /home/qkrgangeun/LigMet/data/biolip/dl/features/1vqm.npz
+File not found: /home/qkrgangeun/LigMet/data/biolip/dl/features/1vq9.npz
+File not found: /home/qkrgangeun/LigMet/data/biolip/dl/features/1vqk.npz
+Broken file: /home/qkrgangeun/LigMet/data/biolip/dl/features/1vq4.npz - File is not a zip file
+File not found: /home/qkrgangeun/LigMet/data/biolip/dl/features/1vql.npz
+File not found: /home/qkrgangeun/LigMet/data/biolip/dl/features/1vq8.npz
+File not found: /home/qkrgangeun/LigMet/data/biolip/dl/features/1vq7.npz
+Broken file: /home/qkrgangeun/LigMet/data/biolip/dl/features/2df7.npz - File is not a zip file
+Broken file: /home/qkrgangeun/LigMet/data/biolip/dl/features/2ja7.npz - File is not a zip file
+File not found: /home/qkrgangeun/LigMet/data/biolip/dl/features/2otj.npz
+Broken file: /home/qkrgangeun/LigMet/data/biolip/dl/features/2uxd.npz - File is not a zip file

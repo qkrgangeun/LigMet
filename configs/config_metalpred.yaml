@@ -1,0 +1,122 @@
+seed_everything: 42
+data:
+  dataset_type: "preprocessed"
+  train_data_file: "/home/qkrgangeun/LigMet/sh/find_diff_metalpred/train_clustered3_filtered.txt"
+  val_data_file: "/home/qkrgangeun/LigMet/sh/find_diff_metalpred/valid_clustered3_filtered.txt"
+  test_data_file: "/home/qkrgangeun/LigMet/code/text/biolip/filtered/val_pdbs_filtered.txt"
+
+  preprocessed:
+    features_dir: "/home/qkrgangeun/LigMet/data/metalpred/dl/features"
+    rf_result_dir: "/home/qkrgangeun/MetalPred/data/biolip_group/latest/features"
+    topk: 16
+    edge_dist_cutoff: 15
+    pocket_dist: 3
+    rf_threshold: 0.5
+
+  onthefly:
+    pdb_dir: "/home/qkrgangeun/LigMet/data/biolip/pdb"
+    rf_model: "/home/qkrgangeun/LigMet/data/biolip/rf/rf_param/example.param"
+    topk: 16
+    edge_dist_cutoff: 4.5
+    pocket_dist: 6
+    rf_threshold: 1.0
+
+  
+  train_loader_params:
+    batch_size: 1
+    num_workers: 0
+    shuffle: False
+    pin_memory: True
+
+  val_loader_params:
+    batch_size: 1
+    num_workers: 0
+    shuffle: False
+    pin_memory: True
+
+  test_loader_params:
+    batch_size: 1
+    num_workers: 1
+    shuffle: False
+    pin_memory: True
+
+model:
+  model: "ligmet.models.Model"
+  model_config:
+    encoder_args:
+      input_dim: 230 
+      hidden_dim: 64
+      dropout_rate: 0.1
+      output_dim: 32
+      egnn_args:
+        input_dim: 32
+        hidden_dim: 64
+        num_layers: 5
+        edge_feat_dim: 0
+        output_dim: 32
+        dropout_rate: 0.1
+
+    decoder_args:
+      use_attention_prob: false
+      use_attention_type: false
+      binning_layer_args:
+        input_dim: 32
+        output_dim: 3  
+        num_layers: 3   
+        dropout_rate: 0.5
+      prob_transform_args:
+        attention:
+          input_dim: 16
+          embed_dim: 64
+          output_dim: 1
+          num_heads: 8
+          dropout_rate: 0.1
+          num_layers: 1
+        linear:
+          input_dim: 32
+          output_dim: 1
+          num_layers: 5
+          dropout_rate: 0.1
+
+      type_transform_args:
+        attention:
+          input_dim: 32
+          embed_dim: 64
+          output_dim: 11
+          num_heads: 8
+          dropout_rate: 0.1
+          num_layers: 1
+        linear:
+          input_dim: 32
+          output_dim: 11
+          num_layers: 5
+          dropout_rate: 0.1
+
+trainer:
+  max_epochs: 50
+  accelerator: auto
+  devices: auto
+  enable_progress_bar: True
+  detect_anomaly: True
+  strategy: "ddp_find_unused_parameters_true"
+  logger:
+    class_path: lightning.pytorch.loggers.WandbLogger
+    init_args:
+      project: "LigMet"
+      name: "metalpreddata_posweight1_blce"
+  callbacks:
+  - class_path: lightning.pytorch.callbacks.ModelCheckpoint
+    init_args:
+      dirpath: "checkpoints"
+      filename: "metalpreddata_posweight1_blce-{epoch:02d}"
+      monitor: "val_loss"
+      mode: "min"
+      save_top_k: 1
+      save_last: False  # 이 콜백에서는 마지막 저장하지 않음
+
+  - class_path: lightning.pytorch.callbacks.ModelCheckpoint
+    init_args:
+      dirpath: "checkpoints"
+      filename: "metalpreddata_posweight1_blce-last"
+      save_top_k: 0     # 모니터링 없이 마지막만 저장
+      save_last: True

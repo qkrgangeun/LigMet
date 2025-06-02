@@ -1,0 +1,2 @@
+/home/qkrgangeun/LigMet/data/biolip/pdb/1bp2.pdb
+/home/qkrgangeun/LigMet/data/biolip/pdb/1bp2.pdb
