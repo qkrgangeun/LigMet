@@ -21,10 +21,11 @@ class PreprocessedDataSet(torch.utils.data.Dataset):
         self.edge_dist_cutoff=edge_dist_cutoff
         self.pocket_dist=pocket_dist
         self.rf_threshold=rf_threshold
-        self.pdbid_lists=[pdb.strip().split(".pdb")[0] for pdb in open(data_file)]
+        self.pdbid_lists=[pdb.strip().split(".pdb")[0] for pdb in open(data_file) if (self.features_dir / f"{pdb.strip().split('.pdb')[0]}.npz").exists()]
         self.eps = eps
         self.alpha = 4/math.log(2) #5.77078
-        
+        self.metal_dir = Path('/home/qkrgangeun/LigMet/data/biolip/metal_label')
+        print(self.features_dir)
     def __len__(self):
         return len(self.pdbid_lists)
     
@@ -33,20 +34,45 @@ class PreprocessedDataSet(torch.utils.data.Dataset):
         L = []
         pdb_id = self.pdbid_lists[index]
         feature_path = self.features_dir / f"{pdb_id}.npz"
+        print('\n')
+        print(feature_path)
         rf_result_path = self.rf_result_dir / f"{pdb_id}.npz"
         data = np.load(feature_path,allow_pickle=True)
+        metal = np.load(self.metal_dir/f"{pdb_id}.npz", allow_pickle=True)
+        # print(self.metal_dir/f"{pdb_id}.npz")
         features = Features(**data)
+        features.metal_positions = metal["metal_positions"]
+        features.metal_types = metal["metal_types"]
+        ##metalpred## -> should # 2 above line
+        
+        if len(features.atom_positions) != len(features.atom_elements):
+            raise Exception(feature_path)
+        if features.bond_masks.shape != (len(features.atom_elements), len(features.atom_elements)):
+        #memory issue: bond mask (l,k) neighbors -> n * n matrix
+            bonds_mask = self.neigh_to_bondmask(features)
+            features.bond_masks = bonds_mask
+        
         grid_positions = features.grid_positions
-        grid_probs = np.load(rf_result_path)
+        grid_data = np.load(rf_result_path)
+        grid_probs = grid_data["prob"] 
+        #metalpred-rf##
+        # grid_positions = grid_data["grid_positions"]
+        # grid_probs = grid_data["grid_probs"]
+        #########
         grid_mask = grid_probs >= self.rf_threshold
         grids_after_rf = grid_positions[grid_mask]
-        features_p, pocket_exist = self.find_pocket(features, grids_after_rf)
+
+        grids_after_rf = np.concatenate((grids_after_rf,features.metal_positions),axis=0)
+        features.grid_positions = grids_after_rf
+        # features_p, pocket_exist = self.find_pocket(features, grids_after_rf)
         
-        if pocket_exist is False:
-            raise AttributeError("there is no grids after randomforest")
+        # if pocket_exist is False:
+        #     raise AttributeError("there is no grids after randomforest")
         
-        g = self.make_graph(features_p)
-        l_prob, l_type, l_vector = self.make_label(features_p)
+        # g = self.make_graph(features_p)
+        g = self.make_graph(features)
+        # l_prob, l_type, l_vector = self.make_label(features_p)
+        l_prob, l_type, l_vector = self.make_label(features)
         labels = torch.cat([l_prob.unsqueeze(1), l_type.unsqueeze(1), l_vector], dim=1)  # shape [N,5]
         G.append(g)
         L.append(labels)
@@ -60,44 +86,85 @@ class PreprocessedDataSet(torch.utils.data.Dataset):
         )
         return G, L, info
 
+    def neigh_to_bondmask(self, features:Features):
+        # bond_mask : [[row], [col]]
+        n_atom = len(features.atom_names)
+        cov_bonds_mask = np.zeros((n_atom,n_atom))
+        neigh = features.bond_masks
+        cov_bonds_mask[neigh[0],neigh[1]] = 1
+        cov_bonds_mask[neigh[1],neigh[0]] = 1
+        return cov_bonds_mask
+    
     def find_pocket(self, features: Features, grids: np.ndarray):
         c_grids = grids
         atom_pos = features.atom_positions
         size = len(features.metal_positions)
-        random_int = np.random.choice(len(grids), size=size, replace=False)
-        combined_positions = np.vstack([c_grids[random_int], features.metal_positions])
-        rtree = cKDTree(combined_positions)
-        mtree = cKDTree(features.metal_positions)
+        # if len(features.metal_positions) > 10:
+        perturb_size = np.random.uniform(0,3,size=features.metal_positions.shape[0])
+        perturb_direct = np.random.randn(features.metal_positions.shape[0],3)
+        normalized_direct = perturb_direct / np.linalg.norm(perturb_direct, axis=-1)[:,None]
+        perturbation = normalized_direct * perturb_size[:,None]
+        perturbed_metal_positions = features.metal_positions + perturbation
+        #TODO size random
+        random_size = np.random.randint(0,2*size)
+        random_int = np.random.choice(len(grids), size=random_size, replace=False)
+        combined_positions = np.vstack([c_grids[random_int], perturbed_metal_positions])
+
         gtree = cKDTree(c_grids)
         ptree = cKDTree(atom_pos)
-        all_positions = np.vstack([features.atom_positions,grids])
-        tree = cKDTree(all_positions)
-        # ii = gtree.query_ball_tree(ptree, self.pocket_dist)
-        ii = rtree.query_ball_tree(ptree, self.pocket_dist)
-        jj = rtree.query_ball_tree(gtree, self.pocket_dist)
-        idx = np.unique(np.concatenate([i for i in ii if i], axis=0)).astype(int)
-        jdx = np.unique(np.concatenate([j for j in jj if j], axis=0)).astype(int)
-        if len(idx) == 0:
-            return None, False
+        
+        # all_positions = np.vstack([features.atom_positions,grids])
+        # tree = cKDTree(all_positions)
+        if len(features.metal_positions) > 10:
+            mtree = cKDTree(perturbed_metal_positions)
+            target = mtree
+            # print('perturbed_metal_positions',len(perturbed_metal_positions))
+        else:
+            rtree = cKDTree(combined_positions)
+            target = rtree
+            # print('len(combined_positions), metal',len(combined_positions), size)
 
+        # ii = target.query_ball_tree(ptree, self.pocket_dist)
+        jj = target.query_ball_tree(gtree, self.pocket_dist)
+        # idx = np.unique(np.concatenate([i for i in ii if i], axis=0)).astype(int)
+        jdx = np.unique(np.concatenate([j for j in jj if j], axis=0)).astype(int)
+
+        # if len(idx) == 0:
+        #     return None, False
+        # c_features = Features(
+        #     atom_positions=atom_pos[idx],
+        #     atom_names=features.atom_names[idx],
+        #     atom_elements=features.atom_elements[idx],
+        #     atom_residues=features.atom_residues[idx],
+        #     residue_idxs=features.residue_idxs[idx],
+        #     chain_ids=features.chain_ids[idx],
+        #     is_ligand=features.is_ligand[idx],
+        #     metal_positions=features.metal_positions, 
+        #     metal_types=features.metal_types,
+        #     grid_positions=c_grids[jdx],
+        #     sasas=features.sasas[idx],
+        #     qs=features.qs[idx],
+        #     sec_structs=features.sec_structs[idx],
+        #     gen_types=features.gen_types[idx],
+        #     bond_masks=features.bond_masks[np.ix_(idx, idx)], 
+        # )
         c_features = Features(
-            atom_positions=atom_pos[idx],
-            atom_names=features.atom_names[idx],
-            atom_elements=features.atom_elements[idx],
-            atom_residues=features.atom_residues[idx],
-            residue_idxs=features.residue_idxs[idx],
-            chain_ids=features.chain_ids[idx],
-            is_ligand=features.is_ligand[idx],
+            atom_positions=atom_pos,
+            atom_names=features.atom_names,
+            atom_elements=features.atom_elements,
+            atom_residues=features.atom_residues,
+            residue_idxs=features.residue_idxs,
+            chain_ids=features.chain_ids,
+            is_ligand=features.is_ligand,
             metal_positions=features.metal_positions, 
             metal_types=features.metal_types,
             grid_positions=c_grids[jdx],
-            sasas=features.sasas[idx],
-            qs=features.qs[idx],
-            sec_structs=features.sec_structs[idx],
-            gen_types=features.gen_types[idx],
-            bond_masks=features.bond_masks[np.ix_(idx, idx)], 
+            sasas=features.sasas,
+            qs=features.qs,
+            sec_structs=features.sec_structs,
+            gen_types=features.gen_types,
+            bond_masks=features.bond_masks, 
         )
-
         return c_features, True
     
     def make_label(self, features:Features)->Union[torch.Tensor, torch.Tensor, torch.Tensor]:
@@ -111,7 +178,7 @@ class PreprocessedDataSet(torch.utils.data.Dataset):
 
         exp_dist = torch.exp(-(dist**2) / self.alpha)
         label_p, _ = torch.max(exp_dist, dim=-1)
-        label_prob = torch.where(label_p <= 0.1, torch.tensor(0.0), label_p)
+        label_prob = torch.where(label_p <= 0.1, torch.tensor(0.0, dtype=label_p.dtype, device=label_p.device), label_p)
 
         min_dist, min_idx = torch.min(dist, dim=-1)  # [g,]
         label_type = torch.where(
@@ -158,7 +225,6 @@ class PreprocessedDataSet(torch.utils.data.Dataset):
         return polarity_vectors
 
     def get_node_features(self, features: Features) -> Tuple[torch.Tensor, torch.Tensor]:
-        # num_res = len(features.atom_names)
         num_grids = len(features.grid_positions)
 
         sasas = torch.from_numpy(features.sasas)
@@ -166,54 +232,66 @@ class PreprocessedDataSet(torch.utils.data.Dataset):
         sec_structs = torch.from_numpy(features.sec_structs)
         atom_gentype = torch.from_numpy(features.gen_types)
         
-        # one hot features: aatype, atomtype, 2nd structures
-        # assign max int for grids
-        aatype = torch.Tensor([standard_residues.index(res) if res in standard_residues else len(standard_residues) for res in features.atom_residues ])
-        grids_aatype = torch.ones(num_grids) * len(standard_residues)+1
+        # One-hot features: aatype, atomtype, 2nd structures
+        aatype = torch.Tensor([
+            standard_residues.index(res) if res in standard_residues else len(standard_residues)
+            for res in features.atom_residues
+        ])
+        grids_aatype = torch.ones(num_grids) * (len(standard_residues) + 1)
         aatype = torch.cat((aatype, grids_aatype))
 
-        atomtype = torch.Tensor([ATOMIC_NUMBERS.get(elem,119) for elem in features.atom_elements])
+        atomtype = torch.Tensor([ATOMIC_NUMBERS.get(elem, 119) for elem in features.atom_elements])
         grids_atomtype = torch.zeros(num_grids)
         atomtype = torch.cat([atomtype, grids_atomtype], dim=0)
-        
-        ##TODO: ligand gentype
-        grids_atomchemtype = torch.ones(num_grids) *(max(sybyl_type_dict.values())+1)
+
+        # Ligand gen_type
+        grids_atomchemtype = torch.ones(num_grids) * (max(sybyl_type_dict.values()) + 1)
         atom_chem_type = torch.cat([atom_gentype, grids_atomchemtype], dim=0)
-        
+
         grids_2nd = torch.ones(num_grids) * len(sec_struct_dict)
         sec_structs = torch.cat([sec_structs, grids_2nd])
-        # one-hot encoding
+        node_type = torch.cat([torch.from_numpy(features.is_ligand),torch.ones_like(grids_2nd)*2])
+        # One-hot encoding
         aatype = F.one_hot(aatype.to(torch.int64), num_classes=len(standard_residues) + 2)
         atomtype = F.one_hot(atomtype.to(torch.int64), num_classes=len(ATOMIC_NUMBERS) + 2)
-        sec_structs = F.one_hot(
-            sec_structs.to(torch.int64), num_classes=len(sec_struct_dict) + 1
-        )
-        atom_chemtype = F.one_hot(
-            atom_chem_type.to(torch.int64), num_classes=max(sybyl_type_dict.values())+2
-        )
-        # real value features: sasas, qs
-        # assign 0 for grids
+        sec_structs = F.one_hot(sec_structs.to(torch.int64), num_classes=len(sec_struct_dict) + 1)
+        atom_chemtype = F.one_hot(atom_chem_type.to(torch.int64), num_classes=max(sybyl_type_dict.values()) + 2)
+        node_type = F.one_hot(node_type.to(torch.int64), num_classes=3)
+        # Real value features: sasas, qs (assign 0 for grids)
         grids_feat = torch.zeros(num_grids)
         sasas = torch.cat((sasas, grids_feat)).unsqueeze(-1)
         qs = torch.cat((qs, grids_feat)).unsqueeze(-1)
         sasas = sasas + self.eps
 
-        n_feats = torch.cat(
-            [aatype, atomtype, atom_chemtype, sec_structs, sasas, qs], dim=1
-        )
-        print(f"NaN in sasas: {torch.isnan(sasas).sum().item()}")
-        print(f"NaN in qs: {torch.isnan(qs).sum().item()}")
-        print(f"NaN in features.qs: {torch.isnan(torch.tensor(features.qs)).sum().item()}")
-        print(f"NaN in sec_structs: {torch.isnan(sec_structs).sum().item()}")
-        print(f"NaN in atom_gentype: {torch.isnan(atom_chemtype).sum().item()}")
-        print(f"NaN in aatype: {torch.isnan(aatype).sum().item()}")
-        print(f"NaN in atomtype: {torch.isnan(atomtype).sum().item()}")
+        # 🔹 NaN 값 변환 (모든 feature에 적용)
+        # sasas = torch.nan_to_num(sasas, nan=0.0, posinf=0.0, neginf=0.0)
+        # qs = torch.nan_to_num(qs, nan=0.0, posinf=0.0, neginf=0.0)
+        # sec_structs = torch.nan_to_num(sec_structs, nan=0.0, posinf=0.0, neginf=0.0)
+        # atom_chemtype = torch.nan_to_num(atom_chemtype, nan=0.0, posinf=0.0, neginf=0.0)
+        # aatype = torch.nan_to_num(aatype, nan=0.0, posinf=0.0, neginf=0.0)
+        # atomtype = torch.nan_to_num(atomtype, nan=0.0, posinf=0.0, neginf=0.0)
+
+        # 모든 feature 합치기
+        n_feats = torch.cat([aatype, atomtype, atom_chemtype, sec_structs, sasas, qs, node_type], dim=1)
+        n_feats = torch.nan_to_num(n_feats, nan=0.0, posinf=0.0, neginf=0.0)
+        # # NaN 값 체크 (Debug)
+        # print(f"NaN in sasas: {torch.isnan(sasas).sum().item()}")
+        # print(f"NaN in qs: {torch.isnan(qs).sum().item()}")
+        # print(f"NaN in sec_structs: {torch.isnan(sec_structs).sum().item()}")
+        # print(f"NaN in atom_gentype: {torch.isnan(atom_chemtype).sum().item()}")
+        # print(f"NaN in aatype: {torch.isnan(aatype).sum().item()}")
+        # print(f"NaN in atomtype: {torch.isnan(atomtype).sum().item()}")
+
+        # Polarity vector 처리
         polarity_vectors = self.make_polarity_vector(features)
         polarity_vectors = torch.tensor(polarity_vectors)
+        polarity_vectors = torch.nan_to_num(polarity_vectors, nan=0.0, posinf=0.0, neginf=0.0)
+
         return n_feats, polarity_vectors
 
+
     def onehot_edge_dist(self, dists: torch.Tensor) -> torch.Tensor:
-        bin_edges = np.arange(0, self.edge_dist_cutoff + 0.5, 0.5)
+        bin_edges = np.arange(0, self.edge_dist_cutoff + 0.5, 0.1)
         dist_binned = np.digitize(dists, bins=bin_edges) - 1
         one_hot_dist = F.one_hot(
             torch.from_numpy(dist_binned), num_classes=len(bin_edges)
@@ -372,12 +450,13 @@ class PreprocessedDataSet(torch.utils.data.Dataset):
         graphs, labels, g_pos, m_pos, m_types, pdb_ids = [], [], [], [], [], []
 
         for G, L, info in samples:
-            graphs.extend(G)  # 각 샘플의 그래프 리스트를 하나의 리스트로 결합
-            labels.extend(L)  # 각 샘플의 결합된 라벨 리스트를 하나의 리스트로 결합
-            g_pos.append(info.grids_positions)
-            m_pos.append(info.metal_positions)
-            m_types.append(info.metal_types)
-            pdb_ids.append(info.pdb_id)
+            if G is not None:
+                graphs.extend(G)  # 각 샘플의 그래프 리스트를 하나의 리스트로 결합
+                labels.extend(L)  # 각 샘플의 결합된 라벨 리스트를 하나의 리스트로 결합
+                g_pos.append(info.grids_positions)
+                m_pos.append(info.metal_positions)
+                m_types.append(info.metal_types)
+                pdb_ids.append(info.pdb_id)
         # 배치 그래프와 배치 라벨 생성
         batched_graphs = dgl.batch(graphs)  # shape [B*N]
         batched_labels = torch.cat(labels, dim=0)  # shape [B*N,2]
@@ -420,9 +499,12 @@ class OnTheFlyDataSet(PreprocessedDataSet):
             **structure_dict  # structure_dict의 내용을 추가
         )
         features = make_features(pdb_path, structure_with_grid)
+        # if features is None:
+        #     return None, None, None
+            
         grid_positions = features.grid_positions
-        print('원래 protein개수:', len(structure.atom_positions))
-        print('원래 grid개수:',len(grids))
+        # print('원래 protein개수:', len(structure.atom_positions))
+        # print('원래 grid개수:',len(grids))
         
         # Randomforest prediction # 
         # grid_probs = np.load(rf_result_path)
@@ -451,12 +533,133 @@ class OnTheFlyDataSet(PreprocessedDataSet):
         )
         return G, L, info
     
-def get_dataset_class(config):
-    dataset_type = config["dataset"]["type"]
+class TestDataSet(PreprocessedDataSet):
+    def __init__(self, data_file: str, features_dir: str, rf_result_dir: str,topk: int, edge_dist_cutoff: float, pocket_dist: float, rf_threshold: float, eps=1e-6):
+        super().__init__(
+            data_file=data_file,  # Pass the data_file
+            features_dir=features_dir,  # Pass the features_dir
+            rf_result_dir=rf_result_dir,  # Pass the rf_result_dir
+            topk=topk,  # Pass the topk
+            edge_dist_cutoff=edge_dist_cutoff,  # Pass the edge_dist_cutoff
+            pocket_dist=pocket_dist,  # Pass the pocket_dist
+            rf_threshold=rf_threshold  # Pass the rf_threshold
+        )
+        self.data_file=Path(data_file)
+        self.features_dir=Path(features_dir)
+        self.rf_result_dir=Path(rf_result_dir)
+        self.topk = topk
+        self.edge_dist_cutoff=edge_dist_cutoff
+        self.pocket_dist=pocket_dist
+        self.rf_threshold=rf_threshold
+        self.pdbid_lists=[pdb.strip().split(".pdb")[0] for pdb in open(data_file) if (self.features_dir / f"{pdb.strip().split('.pdb')[0]}.npz").exists()]
+        self.eps = eps
+        self.alpha = 4/math.log(2) #5.77078
+        
+    def __len__(self):
+        return len(self.pdbid_lists)
     
-    if dataset_type == "preprocessed":
-        return PreprocessedDataSet(**config["dataset"]["preprocessed"])
-    elif dataset_type == "on_the_fly":
-        return OnTheFlyDataSet(**config["dataset"]["onthefly"])
-    else:
-        raise ValueError(f"Unknown dataset type: {dataset_type}")
+    def __getitem__(self, index:int):
+        G = []
+        L = []
+        pdb_id = self.pdbid_lists[index]
+        feature_path = self.features_dir / f"{pdb_id}.npz"
+        data = np.load(feature_path,allow_pickle=True)
+        features = Features(**data)
+        if features.bond_masks.shape != (len(features.atom_elements), len(features.atom_elements)):
+            bonds_mask = self.neigh_to_bondmask(features)
+            features.bond_masks = bonds_mask
+        grid_positions = features.grid_positions
+
+        grids_after_rf = grid_positions
+        
+        g = self.make_graph(features)
+        l_prob, l_type, l_vector = self.make_label(features)
+        labels = torch.cat([l_prob.unsqueeze(1), l_type.unsqueeze(1), l_vector], dim=1)  # shape [N,5]
+        G.append(g)
+        L.append(labels)
+        
+        if not G:
+            raise AttributeError(f"{pdb_id} have none type graph")
+        
+        info = Info(
+            pdb_id=np.array(pdb_id),
+            grids_positions=torch.tensor(grids_after_rf, dtype=torch.float32),
+            metal_positions=torch.tensor(features.metal_positions, dtype=torch.float32),
+            metal_types=torch.tensor([metals.index(metal) for metal in features.metal_types]),
+        )
+        return G, L, info
+    
+    
+class DataSetGraphCashe(PreprocessedDataSet):
+    def __init__(self, data_file: str, features_dir: str, rf_result_dir: str,topk: int, edge_dist_cutoff: float, pocket_dist: float, rf_threshold: float, eps=1e-6): 
+        super().__init__(
+            data_file=data_file,  # Pass the data_file
+            features_dir=features_dir,  # Pass the features_dir
+            rf_result_dir=rf_result_dir,  # Pass the rf_result_dir
+            topk=topk,  # Pass the topk
+            edge_dist_cutoff=edge_dist_cutoff,  # Pass the edge_dist_cutoff
+            pocket_dist=pocket_dist,  # Pass the pocket_dist
+            rf_threshold=rf_threshold,  # Pass the rf_threshold
+            eps=eps
+        )
+        self._g_cache = {}
+        
+    def __len__(self):
+        return len(self.pdbid_lists)
+    
+    def __getitem__(self, index:int):
+        G = []
+        L = []
+        pdb_id = self.pdbid_lists[index]
+        
+        if pdb_id in self._g_cache:
+            print('*in_cashe', pdb_id)
+            return self._g_cache[pdb_id]
+        print('not_in_cashe', pdb_id)
+        feature_path = self.features_dir / f"{pdb_id}.npz"
+        print('\n')
+        print(feature_path)
+        rf_result_path = self.rf_result_dir / f"{pdb_id}.npz"
+        data = np.load(feature_path,allow_pickle=True)
+        metal = np.load(self.metal_dir/f"{pdb_id}.npz", allow_pickle=True)
+        print(self.metal_dir/f"{pdb_id}.npz")
+        features = Features(**data)
+        features.metal_positions = metal["metal_positions"]
+        features.metal_types = metal["metal_types"]
+        if len(features.atom_positions) != len(features.atom_elements):
+            raise Exception(feature_path)
+        if features.bond_masks.shape != (len(features.atom_elements), len(features.atom_elements)):
+        #memory issue: bond mask (l,k) neighbors -> n * n matrix
+            bonds_mask = self.neigh_to_bondmask(features)
+            features.bond_masks = bonds_mask
+        
+        grid_positions = features.grid_positions
+        grid_data = np.load(rf_result_path)
+        grid_probs = grid_data["prob"] 
+        grid_mask = grid_probs >= self.rf_threshold
+        grids_after_rf = grid_positions[grid_mask]
+        grids_after_rf = np.concatenate((grids_after_rf,features.metal_positions),axis=0)
+        features.grid_positions = grids_after_rf
+        # features_p, pocket_exist = self.find_pocket(features, grids_after_rf)
+        
+        # if pocket_exist is False:
+        #     raise AttributeError("there is no grids after randomforest")
+        
+        # g = self.make_graph(features_p)
+        g = self.make_graph(features)
+        # l_prob, l_type, l_vector = self.make_label(features_p)
+        l_prob, l_type, l_vector = self.make_label(features)
+        labels = torch.cat([l_prob.unsqueeze(1), l_type.unsqueeze(1), l_vector], dim=1)  # shape [N,5]
+        G.append(g)
+        L.append(labels)
+        if not G:
+            raise AttributeError(f"{pdb_id} have none type graph")
+        info = Info(
+            pdb_id=np.array(pdb_id),
+            grids_positions=torch.tensor(grids_after_rf, dtype=torch.float32),
+            metal_positions=torch.tensor(features.metal_positions, dtype=torch.float32),
+            metal_types=torch.tensor([metals.index(metal) for metal in features.metal_types]),
+        )
+        self._g_cache[pdb_id] = (G, L, info)
+        return G, L, info
+        

@@ -13,9 +13,9 @@ def near_lig(atom_coords, atom_elems, residues, grids, threshold):
     n_lig_NOS = []
     n_lig_nion = []
     n_lig_etc = []
-    nos_mask = np.isin(atom_elems, ['N','O','S'])
+    nos_mask = np.isin(atom_elems, ['N','O','S','SE'])
     neg_ion_mask = np.isin(atom_elems,['BR','CL','I'])&np.isin(residues,['BR','CL','I'])
-    etc_mask=np.isin(atom_elems,['P','SE','TE','BR','CL','I'])&~np.isin(residues,['P','SE','TE','BR','CL','I'])
+    etc_mask=np.isin(atom_elems,['P','TE','BR','CL','I'])&~np.isin(residues,['P','TE','BR','CL','I'])
     for n in neighs: 
         current_nos_mask = nos_mask[n]
         current_nion_mask = neg_ion_mask[n]

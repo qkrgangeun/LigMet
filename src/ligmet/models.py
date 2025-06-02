@@ -10,7 +10,7 @@ class EGNNBlock(nn.Module):
     """
     Equivariant Graph Neural Network (EGNN) Block with residual connections and normalization.
     """
-    def __init__(self, input_dim, hidden_dim, num_layers, edge_feat_dim, output_dim):
+    def __init__(self, input_dim, hidden_dim, num_layers, edge_feat_dim, output_dim, dropout_rate):
         super().__init__()
         self.layers = nn.ModuleList([
             EGNNConv(
@@ -22,13 +22,15 @@ class EGNNBlock(nn.Module):
         ])
         self.norm_layers = nn.ModuleList([nn.LayerNorm(output_dim) for _ in range(num_layers)])
         self.activation = nn.GELU()
-
+        self.dropout = nn.Dropout(dropout_rate)
+        
     def forward(self, graph, node_features, edge_features=None, coord_features=None):
         for i, layer in enumerate(self.layers):
             residual = node_features
             node_features, _ = layer(graph, node_features, coord_features, edge_features)
             node_features = self.norm_layers[i](node_features)
             node_features = self.activation(node_features)
+            node_features = self.dropout(node_features)
             node_features += residual  # Residual connection
         return node_features
 
@@ -148,16 +150,16 @@ class Model(pl.LightningModule):
         node_features, edge_features = self.encoder(graph)
 
         # NaN 값 확인
-        print(f"NaN in node_features: {torch.isnan(node_features).sum().item()}")
-        print(f"NaN in edge_features: {torch.isnan(edge_features).sum().item()}")
+        # print(f"NaN in node_features: {torch.isnan(node_features).sum().item()}")
+        # print(f"NaN in edge_features: {torch.isnan(edge_features).sum().item()}")
 
         # 디코더 실행
         prob_prediction, type_prediction, binning_prediction = self.decoder(node_features)
 
         # NaN 값 확인
-        print(f"NaN in prob_prediction: {torch.isnan(prob_prediction).sum().item()}")
-        print(f"NaN in type_prediction: {torch.isnan(type_prediction).sum().item()}")
-        print(f"NaN in binning_prediction: {torch.isnan(binning_prediction).sum().item()}")
+        # print(f"NaN in prob_prediction: {torch.isnan(prob_prediction).sum().item()}")
+        # print(f"NaN in type_prediction: {torch.isnan(type_prediction).sum().item()}")
+        # print(f"NaN in binning_prediction: {torch.isnan(binning_prediction).sum().item()}")
 
         return prob_prediction, type_prediction, binning_prediction
 
