@@ -103,12 +103,12 @@ trainer:
     class_path: lightning.pytorch.loggers.WandbLogger
     init_args:
       project: "LigMet"
-      name: "0604_no_Na"
+      name: "0604_typeattn"
   callbacks:
   - class_path: lightning.pytorch.callbacks.ModelCheckpoint
     init_args:
       dirpath: "checkpoints"
-      filename: "0604_no_NA-{epoch:02d}"
+      filename: "0604_type_attn-{epoch:02d}"
       monitor: "val_loss"
       mode: "min"
       save_top_k: 1
@@ -117,6 +117,6 @@ trainer:
   - class_path: lightning.pytorch.callbacks.ModelCheckpoint
     init_args:
       dirpath: "checkpoints"
-      filename: 0604_no_Na-last"
+      filename: 0604_type_attn-last"
       save_top_k: 0     # 모니터링 없이 마지막만 저장
       save_last: True
