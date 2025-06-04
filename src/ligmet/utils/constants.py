@@ -1,4 +1,4 @@
-metals = ["MG", "ZN", "MN", "CA", "FE", "NI", "CO", "CU", "K", "NA"]
+metals = ["MG", "ZN", "MN", "CA", "FE", "NI", "CO", "CU", "K"]
 # metal_counts = {
 #     "MG": 71998, "ZN": 71631, "MN": 12312, "CA": 87831, "FE": 9426,"NI": 1448, "CO": 2167, "CU": 5556,"K": 3895, "NA": 18830, "None":100000
 # }
@@ -15,7 +15,6 @@ metal_counts = {
     "CO": 1936,
     "CU": 6989,
     "K": 429,
-    "NA": 100,
     "None" : 100000
 }
 metal_counts_focus = {
@@ -28,7 +27,29 @@ metal_counts_focus = {
     "CO": 1936,
     "CU": 6989,
     "K": 429,
-    "NA": 100,
+}
+metal_counts = {
+    "MG": 3434,
+    "ZN": 7557,
+    "MN": 1651,
+    "CA": 7667,
+    "FE": 707,
+    "NI": 36,
+    "CO": 452,
+    "CU": 1032,
+    "K": 29,
+    "None" : 10000
+}
+metal_counts_focus = {
+    "MG": 3434,
+    "ZN": 7557,
+    "MN": 1651,
+    "CA": 7667,
+    "FE": 707,
+    "NI": 36,
+    "CO": 452,
+    "CU": 1032,
+    "K": 29,
 }
 aliphatic_carbons = {
     "ALA": ["CB"],
