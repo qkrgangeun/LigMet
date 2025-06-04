@@ -57,7 +57,7 @@ model:
         dropout_rate: 0.1
 
     decoder_args:
-      use_attention_prob: True
+      use_attention_prob: False
       use_attention_type: True
       binning_layer_args:
         input_dim: 32
