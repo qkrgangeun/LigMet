@@ -57,8 +57,8 @@ model:
         dropout_rate: 0.1
 
     decoder_args:
-      use_attention_prob: false
-      use_attention_type: false
+      use_attention_prob: True
+      use_attention_type: True
       binning_layer_args:
         input_dim: 32
         output_dim: 3  
@@ -69,9 +69,9 @@ model:
           input_dim: 32
           embed_dim: 16
           output_dim: 1
-          num_heads: 8
+          num_heads: 4
           dropout_rate: 0.1
-          num_layers: 1
+          num_layers: 5
         linear:
           input_dim: 32
           output_dim: 1
@@ -103,12 +103,12 @@ trainer:
     class_path: lightning.pytorch.loggers.WandbLogger
     init_args:
       project: "LigMet"
-      name: "0604_distributed_cefocus_posweight2_typeattn5"
+      name: "0604_no_Na"
   callbacks:
   - class_path: lightning.pytorch.callbacks.ModelCheckpoint
     init_args:
       dirpath: "checkpoints"
-      filename: "0604_distributed_cefocus_posweight2_typeattn5-{epoch:02d}"
+      filename: "0604_no_NA-{epoch:02d}"
       monitor: "val_loss"
       mode: "min"
       save_top_k: 1
@@ -117,6 +117,6 @@ trainer:
   - class_path: lightning.pytorch.callbacks.ModelCheckpoint
     init_args:
       dirpath: "checkpoints"
-      filename: 0604_distributed_cefocus_posweight2_typeattn5-last"
+      filename: 0604_no_Na-last"
       save_top_k: 0     # 모니터링 없이 마지막만 저장
       save_last: True
