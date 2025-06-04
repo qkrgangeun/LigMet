@@ -31,11 +31,11 @@ class LigMetModel(LightningModule):
             "metal_weight_focus", 
             torch.tensor([10000 / metal_counts.get(metal, 10000) for metal in metal_counts_focus], dtype=torch.float32)
         )
-        self.register_buffer("pos_weight", torch.tensor([1], dtype=torch.float32))
+        self.register_buffer("pos_weight", torch.tensor([2], dtype=torch.float32))
         self.register_buffer("bin_weights", torch.tensor([1, 300, 1000], dtype=torch.float32))
 
         self.loss_fns = nn.ModuleDict({
-            "BCE": torch.nn.BCEWithLogitsLoss(),#FocalLoss(alpha=0.5, reduction='mean'),#torch.nn.BCEWithLogitsLoss(pos_weight=self.pos_weight),#pos_weight=self.pos_weight, reduction='none'
+            "BCE": torch.nn.BCEWithLogitsLoss(pos_weight=self.pos_weight),#FocalLoss(alpha=0.5, reduction='mean'),#torch.nn.BCEWithLogitsLoss(pos_weight=self.pos_weight),#pos_weight=self.pos_weight, reduction='none'
             "Bin": torch.nn.CrossEntropyLoss(),#weight=self.bin_weights
             "CE": torch.nn.CrossEntropyLoss(weight=self.metal_weight),
             "CEfocus": torch.nn.CrossEntropyLoss(weight=self.metal_weight_focus),#weight=self.metal_weight_focus
@@ -65,10 +65,10 @@ class LigMetModel(LightningModule):
         logs = {}
 
         bce_loss = self.loss_fns["BCE"](pred.squeeze(-1), label[..., 0])
-        label_zero_mask = label[...,0] == 0
+        # label_zero_mask = label[...,0] == 0
         # bce_loss_scaled = torch.where(label_zero_mask, bce_loss, 200*bce_loss)
         logs["BCE Loss"] = bce_loss
-        loss = 1/4*bce_loss
+        loss = bce_loss
 
         if type_pred is not None:
             ce_loss = self.loss_fns["CE"](type_pred, label[..., 1].long())
@@ -83,13 +83,13 @@ class LigMetModel(LightningModule):
                 logs["CE Focus Loss"] = ce_focus_loss.item()
                 loss += ce_focus_loss
 
-        if bin_pred is not None:
-            bin_label = (label[..., 0] > 0.75).long() + (label[..., 0] > 0.5).long()
-            bin_loss = self.loss_fns["Bin"](bin_pred,bin_label)
-            logs["Bin Loss"] = bin_loss.item()
-            if torch.isnan(bin_pred).any() or torch.isinf(bin_pred).any():
-                # print("⚠️ bin_pred에 NaN/Inf 값 발견됨!")
-                bin_pred = torch.nan_to_num(bin_pred, nan=0.0, posinf=1.0, neginf=-1.0)
+        # if bin_pred is not None:
+        #     bin_label = (label[..., 0] > 0.75).long() + (label[..., 0] > 0.5).long()
+        #     bin_loss = self.loss_fns["Bin"](bin_pred,bin_label)
+        #     logs["Bin Loss"] = bin_loss.item()
+        #     if torch.isnan(bin_pred).any() or torch.isinf(bin_pred).any():
+        #         # print("⚠️ bin_pred에 NaN/Inf 값 발견됨!")
+        #         bin_pred = torch.nan_to_num(bin_pred, nan=0.0, posinf=1.0, neginf=-1.0)
 
         return loss, logs
 
