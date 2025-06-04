@@ -82,13 +82,13 @@ model:
         attention:
           input_dim: 32
           embed_dim: 16
-          output_dim: 11
+          output_dim: 10
           num_heads: 4
           dropout_rate: 0.1
           num_layers: 5
         linear:
           input_dim: 32
-          output_dim: 11
+          output_dim: 10
           num_layers: 5
           dropout_rate: 0.1
 
