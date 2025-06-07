@@ -3,7 +3,7 @@ from lightning import LightningModule, LightningDataModule  # type: ignore
 from pathlib import Path
 import torch.nn.functional as F
 from torch.utils.data import DataLoader  # type: ignore
-from ligmet.dataset import OnTheFlyDataSet, PreprocessedDataSet, TestDataSet, DataSetGraphCashe
+from ligmet.dataset import OnTheFlyDataSet, PreprocessedDataSet, TestDataSet, DataSetGraphCashe, NPZCachedDataset, GraphCachedDataset, GraphFeatureCachedDataset, CachedEdgeDataset 
 # from ligmet.utils.sampler import get_weighted_sampler
 from typing import Type, Optional 
 import torch.nn as nn # type: ignore
@@ -316,8 +316,6 @@ class LigMetModel(LightningModule):
         return optimizer
 
 
-
-
 class LigMetDataModule(LightningDataModule):
     def __init__(
         self,
@@ -386,6 +384,10 @@ class LigMetDataModule(LightningDataModule):
 
     def train_dataloader(self):
         sampler = DistributedSampler(self.train_dataset, shuffle=True)  # DistributedSampler 추가 WeightedSampler
+        if isinstance(sampler, torch.utils.data.DistributedSampler):
+            print('Sampler: DistributedSampler')
+        else:
+            print('Sampler: WeightedSampler')
         return DataLoader(self.train_dataset, collate_fn=self.train_dataset.collate, sampler=sampler, **self.train_loader_params)
     # def train_dataloader(self):
         # if self.dataset_type == "preprocessed" or self.dataset_type == "onthefly":
