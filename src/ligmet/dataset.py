@@ -11,6 +11,7 @@ from ligmet.utils.pdb import read_pdb, StructureWithGrid
 from ligmet.utils.grid import sasa_grids_thread, filter_by_clashmap
 from dataclasses import asdict
 import math
+from tqdm import tqdm
 class PreprocessedDataSet(torch.utils.data.Dataset):
     def __init__(self, data_file: str, features_dir: str, rf_result_dir: str,topk: int, edge_dist_cutoff: float, pocket_dist: float, rf_threshold: float, eps=1e-6):
         super().__init__()
@@ -35,7 +36,7 @@ class PreprocessedDataSet(torch.utils.data.Dataset):
         pdb_id = self.pdbid_lists[index]
         feature_path = self.features_dir / f"{pdb_id}.npz"
         print('\n')
-        print(feature_path)
+        # print(feature_path)
         rf_result_path = self.rf_result_dir / f"{pdb_id}.npz"
         data = np.load(feature_path,allow_pickle=True)
         metal = np.load(self.metal_dir/f"{pdb_id}.npz", allow_pickle=True)
@@ -202,10 +203,10 @@ class PreprocessedDataSet(torch.utils.data.Dataset):
         G.ndata["grid_mask"] = grid_mask.to(torch.float32)
         G.edata["L0"] = e_feats.to(torch.float32)
         G.edata["L1"] = rel_vec.to(torch.float32)
-        print('graph node개수:',len(xyz))
-        print('graph protein node개수:', len(features.atom_positions))
-        print('graph grid node개수:',len(features.grid_positions))
-        print('graph edge개수:',len(e_feats))
+        # print('graph node개수:',len(xyz))
+        # print('graph protein node개수:', len(features.atom_positions))
+        # print('graph grid node개수:',len(features.grid_positions))
+        # print('graph edge개수:',len(e_feats))
         return G
     
     def make_polarity_vector(self, features: Features) -> np.ndarray:
@@ -471,6 +472,7 @@ class PreprocessedDataSet(torch.utils.data.Dataset):
             metal_types=m_typess,
         )
         return batched_graphs, batched_labels, batched_infos
+
     
     
 class OnTheFlyDataSet(PreprocessedDataSet):
@@ -663,3 +665,398 @@ class DataSetGraphCashe(PreprocessedDataSet):
         self._g_cache[pdb_id] = (G, L, info)
         return G, L, info
         
+class NPZCachedDataset(PreprocessedDataSet):
+    def __init__(self, data_file: str, features_dir: str, rf_result_dir: str,
+                 topk: int, edge_dist_cutoff: float, pocket_dist: float, rf_threshold: float, eps=1e-6):
+        super().__init__(data_file, features_dir, rf_result_dir, topk,
+                         edge_dist_cutoff, pocket_dist, rf_threshold, eps)
+
+        self._cached_features = {}
+        self._cached_metal = {}
+        self._cached_rf = {}
+
+        print("⏳ Caching .npz files into memory...")
+        for pdb_id in tqdm(self.pdbid_lists):
+            feat_path = self.features_dir / f"{pdb_id}.npz"
+            if feat_path.exists():
+                self._cached_features[pdb_id] = np.load(feat_path, allow_pickle=True)
+
+            metal_path = self.metal_dir / f"{pdb_id}.npz"
+            if metal_path.exists():
+                self._cached_metal[pdb_id] = np.load(metal_path, allow_pickle=True)
+
+            rf_path = self.rf_result_dir / f"{pdb_id}.npz"
+            if rf_path.exists():
+                self._cached_rf[pdb_id] = np.load(rf_path, allow_pickle=True)
+
+        print(f"✅ Done caching {len(self._cached_features)} feature files.")
+        print(f"🧠 Estimated NPZ cache memory: {self.format_bytes(self.get_total_cache_size())}")
+
+    def __getitem__(self, index: int):
+        G, L = [], []
+        pdb_id = self.pdbid_lists[index]
+
+        data = self._cached_features[pdb_id]
+        metal = self._cached_metal[pdb_id]
+        grid_data = self._cached_rf[pdb_id]
+
+        features = Features(**data)
+        features.metal_positions = metal["metal_positions"]
+        features.metal_types = metal["metal_types"]
+
+        if len(features.atom_positions) != len(features.atom_elements):
+            raise Exception(f"[{pdb_id}] Mismatch in atom data.")
+        if features.bond_masks.shape != (len(features.atom_elements), len(features.atom_elements)):
+            features.bond_masks = self.neigh_to_bondmask(features)
+
+        grid_positions = features.grid_positions
+        grid_probs = grid_data["prob"]
+        grid_mask = grid_probs >= self.rf_threshold
+        grids_after_rf = grid_positions[grid_mask]
+        grids_after_rf = np.concatenate((grids_after_rf, features.metal_positions), axis=0)
+        features.grid_positions = grids_after_rf
+
+        g = self.make_graph(features)
+        l_prob, l_type, l_vector = self.make_label(features)
+        labels = torch.cat([l_prob.unsqueeze(1), l_type.unsqueeze(1), l_vector], dim=1)
+
+        G.append(g)
+        L.append(labels)
+
+        info = Info(
+            pdb_id=np.array(pdb_id),
+            grids_positions=torch.tensor(grids_after_rf, dtype=torch.float32),
+            metal_positions=torch.tensor(features.metal_positions, dtype=torch.float32),
+            metal_types=torch.tensor([metals.index(m) for m in features.metal_types]),
+        )
+        return G, L, info
+
+    def get_total_cache_size(self) -> int:
+        """Calculate total memory used by cached .npz files in bytes."""
+        def get_npz_dict_size(npz_dict: dict) -> int:
+            return sum(arr.nbytes for arr in npz_dict.values() if isinstance(arr, np.ndarray))
+
+        total_bytes = 0
+        for cache in [self._cached_features, self._cached_metal, self._cached_rf]:
+            for npz_obj in cache.values():
+                total_bytes += get_npz_dict_size(npz_obj)
+        return total_bytes
+
+    @staticmethod
+    def format_bytes(num_bytes: int) -> str:
+        for unit in ['B', 'KB', 'MB', 'GB', 'TB']:
+            if num_bytes < 1024:
+                return f"{num_bytes:.2f} {unit}"
+            num_bytes /= 1024
+        return f"{num_bytes:.2f} PB"
+
+class GraphCachedDataset(PreprocessedDataSet):
+    def __init__(self, data_file: str, features_dir: str, rf_result_dir: str,
+                 topk: int, edge_dist_cutoff: float, pocket_dist: float,
+                 rf_threshold: float, eps=1e-6):
+        super().__init__(data_file, features_dir, rf_result_dir,
+                         topk, edge_dist_cutoff, pocket_dist, rf_threshold, eps)
+        self._graph_cache = {}
+        self._graph_size_cache = {}
+
+        print("⏳ Caching all graphs into memory...")
+
+        for pdb_id in self.pdbid_lists:
+            try:
+                feature_path = self.features_dir / f"{pdb_id}.npz"
+                rf_result_path = self.rf_result_dir / f"{pdb_id}.npz"
+                metal_path = self.metal_dir / f"{pdb_id}.npz"
+
+                data = np.load(feature_path, allow_pickle=True)
+                metal = np.load(metal_path, allow_pickle=True)
+                rf_data = np.load(rf_result_path)
+
+                features = Features(**data)
+                features.metal_positions = metal["metal_positions"]
+                features.metal_types = metal["metal_types"]
+
+                if len(features.atom_positions) != len(features.atom_elements):
+                    raise Exception(f"{pdb_id}: mismatched atom info")
+
+                if features.bond_masks.shape != (len(features.atom_elements), len(features.atom_elements)):
+                    features.bond_masks = self.neigh_to_bondmask(features)
+
+                grid_probs = rf_data["prob"]
+                grid_positions = features.grid_positions
+                grid_mask = grid_probs >= self.rf_threshold
+                grids_after_rf = grid_positions[grid_mask]
+                grids_after_rf = np.concatenate([grids_after_rf, features.metal_positions], axis=0)
+                features.grid_positions = grids_after_rf
+
+                g = self.make_graph(features)
+                l_prob, l_type, l_vector = self.make_label(features)
+                labels = torch.cat([l_prob.unsqueeze(1), l_type.unsqueeze(1), l_vector], dim=1)
+
+                info = Info(
+                    pdb_id=np.array(pdb_id),
+                    grids_positions=torch.tensor(grids_after_rf, dtype=torch.float32),
+                    metal_positions=torch.tensor(features.metal_positions, dtype=torch.float32),
+                    metal_types=torch.tensor([metals.index(m) for m in features.metal_types]),
+                )
+
+                self._graph_cache[pdb_id] = ([g], [labels], info)
+                self._graph_size_cache[pdb_id] = self._estimate_sample_size([g], [labels])
+                print(f"✅ Cached {pdb_id}")
+            except Exception as e:
+                print(f"⚠️ Failed to process {pdb_id}: {e}")
+
+        print(f"✅ Cached {len(self._graph_cache)} / {len(self.pdbid_lists)} graphs")
+        print(f"🧠 Total graph memory: {self.format_bytes(self.get_total_graph_cache_size())}")
+
+    def __getitem__(self, index: int):
+        pdb_id = self.pdbid_lists[index]
+        return self._graph_cache[pdb_id]
+
+    def _estimate_sample_size(self, G: list, L: list) -> int:
+        size = 0
+        for g in G:
+            for key in g.ndata:
+                size += g.ndata[key].element_size() * g.ndata[key].nelement()
+            for key in g.edata:
+                size += g.edata[key].element_size() * g.edata[key].nelement()
+        for l in L:
+            size += l.element_size() * l.nelement()
+        return size
+
+    def get_total_graph_cache_size(self) -> int:
+        return sum(self._graph_size_cache.values())
+
+    @staticmethod
+    def format_bytes(num_bytes: int) -> str:
+        for unit in ['B', 'KB', 'MB', 'GB', 'TB']:
+            if num_bytes < 1024:
+                return f"{num_bytes:.2f} {unit}"
+            num_bytes /= 1024
+        return f"{num_bytes:.2f} PB"
+    
+class GraphFeatureCachedDataset(PreprocessedDataSet):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        self.graph_cache = {}
+
+        print("🔄 Caching node and edge features...")
+        for pdb_id in tqdm(self.pdbid_lists):
+            try:
+                # Load and preprocess features
+                feature_path = self.features_dir / f"{pdb_id}.npz"
+                rf_result_path = self.rf_result_dir / f"{pdb_id}.npz"
+                metal_path = self.metal_dir / f"{pdb_id}.npz"
+
+                data = np.load(feature_path, allow_pickle=True)
+                metal = np.load(metal_path, allow_pickle=True)
+                rf_data = np.load(rf_result_path)
+
+                features = Features(**data)
+                features.metal_positions = metal["metal_positions"]
+                features.metal_types = metal["metal_types"]
+                if features is None:
+                    continue
+
+                if features.bond_masks.shape != (len(features.atom_elements), len(features.atom_elements)):
+                    features.bond_masks = self.neigh_to_bondmask(features)
+
+                rf_data = np.load(rf_result_path)
+                grid_probs = rf_data["prob"]
+                grid_mask = grid_probs >= self.rf_threshold
+                grids_after_rf = features.grid_positions[grid_mask]
+                grids_after_rf = np.concatenate((grids_after_rf, features.metal_positions), axis=0)
+                features.grid_positions = grids_after_rf
+
+                label_prob, label_type, label_vector = self.make_label(features)
+                label = torch.cat([label_prob.unsqueeze(1), label_type.unsqueeze(1), label_vector], dim=1)
+
+                # Features to cache
+                node_feats, polar_vecs = self.get_node_features(features)
+                edge_index_src, edge_index_dst, edge_feats, edge_rel_vecs = self.make_edge(features)
+                grid_mask_tensor = torch.ones(len(node_feats))
+                grid_mask_tensor[:len(features.sasas)] = 0
+
+                self.graph_cache[pdb_id] = {
+                    "node_feats": node_feats,
+                    "polar_vecs": polar_vecs,
+                    "grid_mask": grid_mask_tensor,
+                    "edge_index_src": edge_index_src,
+                    "edge_index_dst": edge_index_dst,
+                    "edge_feats": edge_feats,
+                    "edge_rel_vecs": edge_rel_vecs,
+                    "label": label,
+                    "grids_after_rf": torch.tensor(grids_after_rf, dtype=torch.float32),
+                    "metal_positions": torch.tensor(features.metal_positions, dtype=torch.float32),
+                    "metal_types": torch.tensor([metals.index(m) for m in features.metal_types]),
+                }
+            except Exception as e:
+                print(f"❌ Failed to process {pdb_id}: {e}")
+        print("✅ Graph feature caching complete.")
+
+    def __getitem__(self, index: int):
+        pdb_id = self.pdbid_lists[index]
+        data = self.graph_cache[pdb_id]
+        num_nodes = data["node_feats"].shape[0]
+
+        g = dgl.graph((data["edge_index_src"], data["edge_index_dst"]), num_nodes=num_nodes)
+        g.ndata["L0"] = data["node_feats"]
+        g.ndata["L1"] = data["polar_vecs"]
+        g.ndata["grid_mask"] = data["grid_mask"]
+        g.edata["L0"] = data["edge_feats"]
+        g.edata["L1"] = data["edge_rel_vecs"]
+
+        info = Info(
+            pdb_id=np.array(pdb_id),
+            grids_positions=data["grids_after_rf"],
+            metal_positions=data["metal_positions"],
+            metal_types=data["metal_types"]
+        )
+        return [g], [data["label"]], info
+
+import torch
+import torch.nn.functional as F
+import dgl
+from torch.utils.data import Dataset
+import numpy as np
+from typing import Tuple, Dict
+from ligmet.featurizer import Features, Info
+from pathlib import Path
+from ligmet.utils.constants import metals
+from multiprocessing import Manager
+
+class CachedEdgeBuilder:
+    def __init__(self, edge_cache: Dict[str, dict], edge_dist_cutoff: float):
+        self.edge_cache = edge_cache
+        self.edge_dist_cutoff = edge_dist_cutoff
+
+    def edge_type_index(self, src: torch.Tensor, dst: torch.Tensor, num_atom: int) -> torch.Tensor:
+        edge_type = torch.zeros(len(src), dtype=torch.int64)
+        edge_type[(src < num_atom) & (dst >= num_atom)] = 1
+        edge_type[(src >= num_atom) & (dst < num_atom)] = 2
+        edge_type[(src >= num_atom) & (dst >= num_atom)] = 3
+        return edge_type
+
+    def onehot_edge_dist(self, dists: torch.Tensor) -> torch.Tensor:
+        bin_edges = torch.arange(0, self.edge_dist_cutoff + 0.5, 0.1)
+        dist_binned = torch.bucketize(dists, bin_edges) - 1
+        one_hot_dist = F.one_hot(dist_binned, num_classes=len(bin_edges))
+        return one_hot_dist
+
+    def build_graph_from_cache(self, pdb_id: str, num_nodes: int) -> dgl.DGLGraph:
+        cached = self.edge_cache[pdb_id]
+        dist_bin = self.onehot_edge_dist(cached["dist"])
+        onehot_type = F.one_hot(cached["edge_type_idx"], num_classes=4)
+
+        e_feats = torch.cat([
+            onehot_type.to(torch.float32),
+            dist_bin.to(torch.float32),
+            cached["cov_bond"],
+            cached["cos"],
+            cached["sin"]
+        ], dim=1)
+
+        G = dgl.graph((cached["src"], cached["dst"]), num_nodes=num_nodes)
+        G.edata["L0"] = e_feats
+        G.edata["L1"] = cached["e_vec"]
+
+        return G
+
+    def cache_edges(self, pdb_id: str, src, dst, dist, cov_bond, cos, sin, e_vec, num_atom):
+        edge_type_idx = self.edge_type_index(src, dst, num_atom)
+        self.edge_cache[pdb_id] = {
+            "src": src,
+            "dst": dst,
+            "dist": dist,
+            "edge_type_idx": edge_type_idx,
+            "cov_bond": cov_bond.unsqueeze(-1),
+            "cos": cos,
+            "sin": sin,
+            "e_vec": e_vec
+        }
+
+
+class CachedEdgeDataset(PreprocessedDataSet):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.edge_cache = Manager().dict()
+        self.edge_builder = CachedEdgeBuilder(self.edge_cache, self.edge_dist_cutoff)
+
+    def __len__(self):
+        return len(self.pdbid_lists)
+
+    def __getitem__(self, idx: int):
+        pdb_id = self.pdbid_lists[idx]
+
+        feature_path = self.features_dir / f"{pdb_id}.npz"
+        rf_result_path = self.rf_result_dir / f"{pdb_id}.npz"
+        metal_path = self.metal_dir / f"{pdb_id}.npz"
+
+        data = np.load(feature_path, allow_pickle=True)
+        metal = np.load(metal_path, allow_pickle=True)
+        rf_result = np.load(rf_result_path)
+
+        features = Features(**data)
+        features.metal_positions = metal["metal_positions"]
+        features.metal_types = metal["metal_types"]
+        if features.bond_masks.shape != (len(features.atom_elements), len(features.atom_elements)):
+        #memory issue: bond mask (l,k) neighbors -> n * n matrix
+            bonds_mask = self.neigh_to_bondmask(features)
+            features.bond_masks = bonds_mask
+            
+        grid_probs = rf_result["prob"]
+        mask = grid_probs >= 0.5
+        features.grid_positions = np.concatenate((features.grid_positions[mask], features.metal_positions), axis=0)
+
+        node_pos = torch.tensor(np.concatenate([features.atom_positions, features.grid_positions]), dtype=torch.float32)
+        num_atom = len(features.atom_positions)
+        num_nodes = len(node_pos)
+
+        if pdb_id not in self.edge_cache:
+            from scipy.spatial import cKDTree
+            tree = cKDTree(node_pos.numpy())
+            dd, ii = tree.query(node_pos.numpy(), k=16, distance_upper_bound=self.edge_builder.edge_dist_cutoff)
+            index_tensor = torch.arange(num_nodes, dtype=torch.int64)
+            src = torch.flatten(torch.from_numpy(ii)).to(torch.int64)
+            dst = torch.repeat_interleave(index_tensor, 16)
+            dists = torch.flatten(torch.from_numpy(dd))
+            mask = (src != dst) & (src != num_nodes)
+            src = src[mask]
+            dst = dst[mask]
+            dists = dists[mask]
+            e_vec = node_pos[dst] - node_pos[src]
+            cos = F.cosine_similarity(e_vec, e_vec, dim=1, eps=1e-6).unsqueeze(-1)
+            sin = torch.norm(torch.cross(e_vec, e_vec), dim=1, keepdim=True) + 1e-6
+            cov_bond = torch.zeros(len(src))
+
+            self.edge_builder.cache_edges(pdb_id, src, dst, dists, cov_bond, cos, sin, e_vec, num_atom)
+
+        G = self.edge_builder.build_graph_from_cache(pdb_id, num_nodes)
+        G.ndata["xyz"] = node_pos
+
+        metal_pos = torch.tensor(features.metal_positions, dtype=torch.float32)
+        metal_types = torch.tensor([metals.index(m) for m in features.metal_types], dtype=torch.long)
+        grid = torch.tensor(features.grid_positions, dtype=torch.float32)
+
+        diff = grid.unsqueeze(1) - metal_pos.unsqueeze(0)
+        dist = torch.sqrt(torch.sum(diff**2, dim=-1)) + 1e-6
+        exp_dist = torch.exp(-dist**2 / (4 / np.log(2)))
+        label_prob, _ = torch.max(exp_dist, dim=1)
+        label_prob[label_prob <= 0.1] = 0.0
+
+        min_dist, min_idx = torch.min(dist, dim=1)
+        label_type = torch.where(min_dist <= 2.0, metal_types[min_idx], torch.tensor(len(metals)))
+        label_vector = diff[torch.arange(diff.size(0)), min_idx]
+
+        labels = torch.cat([label_prob.unsqueeze(1), label_type.unsqueeze(1), label_vector], dim=1)
+
+        G.ndata["grid_mask"] = torch.cat([torch.zeros(num_atom), torch.ones(len(grid))])
+        n_feats, _ = self.get_node_features(features)
+        G.ndata["L0"] = n_feats
+        return [G], [labels], Info(
+            pdb_id=np.array(pdb_id),
+            grids_positions=grid,
+            metal_positions=metal_pos,
+            metal_types=metal_types
+        )
+
