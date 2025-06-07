@@ -35,7 +35,6 @@ class PreprocessedDataSet(torch.utils.data.Dataset):
         L = []
         pdb_id = self.pdbid_lists[index]
         feature_path = self.features_dir / f"{pdb_id}.npz"
-        print('\n')
         # print(feature_path)
         rf_result_path = self.rf_result_dir / f"{pdb_id}.npz"
         data = np.load(feature_path,allow_pickle=True)
