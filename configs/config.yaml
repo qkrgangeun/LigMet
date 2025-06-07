@@ -23,13 +23,13 @@ data:
 
   
   train_loader_params:
-    batch_size: 1
+    batch_size: 8
     num_workers: 0
     shuffle: False
-    pin_memory: True
+    pin_memory: False
 
   val_loader_params:
-    batch_size: 1
+    batch_size: 8
     num_workers: 0
     shuffle: False
     pin_memory: False

@@ -189,14 +189,22 @@ class LigMetModel(LightningModule):
             labels = torch.cat(all_labels)
             num_classes = labels.max().item() + 1
             per_class_accs = []
+            per_class_counts = []
+
             for cls in range(num_classes):
                 mask = labels == cls
-                if mask.sum() > 0:
+                count = mask.sum().item()
+                per_class_counts.append(count)
+                if count > 0:
                     acc = (preds[mask] == labels[mask]).float().mean()
                     per_class_accs.append(acc)
+                else:
+                    per_class_accs.append(torch.tensor(0.0))  # 또는 생략 가능
             if per_class_accs:
-                print('metal class', metals)
-                print('per_class_accs',per_class_accs)
+                for metal, acc, count in zip(metals, per_class_accs, per_class_counts):
+                    print(f"{metal:<4} | Recall: {acc.item():.3f} | Count: {count}")
+                # print('metal class', metals)
+                # print('per_class_accs',per_class_accs)
                 macro_type_accuracy = torch.stack(per_class_accs).mean().item()
                 self.log("macro_type_accuracy", macro_type_accuracy, on_epoch=True, prog_bar=False, sync_dist=False)
 
