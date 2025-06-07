@@ -1,9 +1,9 @@
 seed_everything: 42
 data:
   dataset_type: "preprocessed"
-  train_data_file: "/home/qkrgangeun/LigMet/code/text/biolip/filtered/train_pdbs_chain_1_filtered.txt"
-  val_data_file: "/home/qkrgangeun/LigMet/code/text/biolip/filtered/val_pdbs_filtered.txt"
-  test_data_file: "/home/qkrgangeun/LigMet/data/biolip/pdb/test_pdb_noerror.txt"
+  train_data_file: "/home/qkrgangeun/LigMet/code/text/biolip/filtered/train_pdbs_chain1_10000.txt"
+  val_data_file: "/home/qkrgangeun/LigMet/code/text/biolip/filtered/val_pdbs_10000.txt"
+  test_data_file: "/home/qkrgangeun/LigMet/code/text/biolip/filtered/val_pdbs_filtered.txt"
 
   preprocessed:
     features_dir: "/home/qkrgangeun/LigMet/data/biolip/dl/features"
@@ -24,28 +24,28 @@ data:
   
   train_loader_params:
     batch_size: 1
-    num_workers: 2
+    num_workers: 0
     shuffle: False
     pin_memory: True
 
   val_loader_params:
     batch_size: 1
-    num_workers: 2
+    num_workers: 0
     shuffle: False
-    pin_memory: True
+    pin_memory: False
 
   test_loader_params:
     batch_size: 1
-    num_workers: 1
+    num_workers: 0
     shuffle: False
-    pin_memory: True
+    pin_memory: False
 
 model:
   model: "ligmet.models.Model"
   model_config:
     encoder_args:
       input_dim: 230 
-      hidden_dim: 64
+      hidden_dim: 128
       dropout_rate: 0.1
       output_dim: 32
       egnn_args:
@@ -81,7 +81,7 @@ model:
       type_transform_args:
         attention:
           input_dim: 32
-          embed_dim: 16
+          embed_dim: 8
           output_dim: 10
           num_heads: 4
           dropout_rate: 0.1
@@ -98,25 +98,25 @@ trainer:
   devices: auto
   enable_progress_bar: True
   detect_anomaly: True
+  accumulate_grad_batches: 8 
   strategy: "ddp_find_unused_parameters_true"
   logger:
     class_path: lightning.pytorch.loggers.WandbLogger
     init_args:
       project: "LigMet"
-      name: "0604_typeattn"
+      name: "0606_distributed_knicoweight"
   callbacks:
   - class_path: lightning.pytorch.callbacks.ModelCheckpoint
     init_args:
       dirpath: "checkpoints"
-      filename: "0604_type_attn-{epoch:02d}"
+      filename: "0606_distributed_knicoweight-{epoch:02d}"
       monitor: "val_loss"
       mode: "min"
-      save_top_k: 1
-      save_last: False  # 이 콜백에서는 마지막 저장하지 않음
-
-  - class_path: lightning.pytorch.callbacks.ModelCheckpoint
-    init_args:
-      dirpath: "checkpoints"
-      filename: 0604_type_attn-last"
-      save_top_k: 0     # 모니터링 없이 마지막만 저장
-      save_last: True
+      save_top_k: 3
+      save_last: True  # 이 콜백에서는 마지막 저장하지 않음
+  # - class_path: lightning.pytorch.callbacks.ModelCheckpoint
+  #   init_args:
+  #     dirpath: "checkpoints"
+  #     filename: "0606_distributed_noNa_typeattn-last"
+  #     save_top_k: 0     # 모니터링 없이 마지막만 저장
+  #     save_last: True
