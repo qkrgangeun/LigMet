@@ -12,6 +12,7 @@ from ligmet.utils.grid import sasa_grids_thread, filter_by_clashmap
 from dataclasses import asdict
 import math
 from tqdm import tqdm
+import torch.nn as nn
 class PreprocessedDataSet(torch.utils.data.Dataset):
     def __init__(self, data_file: str, features_dir: str, rf_result_dir: str,topk: int, edge_dist_cutoff: float, pocket_dist: float, rf_threshold: float, eps=1e-6):
         super().__init__()
@@ -26,6 +27,7 @@ class PreprocessedDataSet(torch.utils.data.Dataset):
         self.eps = eps
         self.alpha = 4/math.log(2) #5.77078
         self.metal_dir = Path('/home/qkrgangeun/LigMet/data/biolip/metal_label')
+        self.relpos_embedding = nn.Embedding(65, 8)  # relative position embedding, dim=8
         print(self.features_dir)
     def __len__(self):
         return len(self.pdbid_lists)
@@ -367,8 +369,8 @@ class PreprocessedDataSet(torch.utils.data.Dataset):
         #     pg2gp_mask = (edge_index_src < num_atom) ^ (edge_index_dst < num_atom)
         #     edge_mask = torch.logical_and(mask, (p2p_mask | g2g_mask | pg2gp_mask))
 
-        edge_index_src = edge_index_src[edge_mask]
-        edge_index_dst = edge_index_dst[edge_mask]
+        edge_index_src = edge_index_src[edge_mask].long()
+        edge_index_dst = edge_index_dst[edge_mask].long()
         dists = dists[edge_mask]
 
         dist_bin = self.onehot_edge_dist(dists)
@@ -455,7 +457,8 @@ class PreprocessedDataSet(torch.utils.data.Dataset):
         ])
 
         same_chain = chain_ids_all[edge_index_src] == chain_ids_all[edge_index_dst]
-        rel_idx = residue_idx_all[edge_index_src] - residue_idx_all[edge_index_dst]  # [E]
+        rel_idx = residue_idx_all[edge_index_src.long()] - residue_idx_all[edge_index_dst.long()]
+
         rel_idx = torch.clamp(rel_idx, -32, 32) + 32
         rel_idx[~same_chain] = 64  # special index for inter-chain
         rel_emb = self.relpos_embedding(rel_idx)  # [E, 8]
