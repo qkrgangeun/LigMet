@@ -104,12 +104,12 @@ trainer:
     class_path: lightning.pytorch.loggers.WandbLogger
     init_args:
       project: "LigMet"
-      name: "0608_distributed128"
+      name: "0608_positionalencoding128"
   callbacks:
   - class_path: lightning.pytorch.callbacks.ModelCheckpoint
     init_args:
       dirpath: "checkpoints"
-      filename: "0608_distributed128-{epoch:02d}"
+      filename: "0608_positionalencoding128-{epoch:02d}"
       monitor: "val_loss"
       mode: "min"
       save_top_k: 3
