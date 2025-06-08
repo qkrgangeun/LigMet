@@ -204,7 +204,7 @@ class LigMetModel(LightningModule):
                     per_class_prec.append(pre)
                 else:
                     per_class_accs.append(torch.tensor(0.0))  # 또는 생략 가능
-                    per_class_prec.append(torch.tensor(0,0))
+                    per_class_prec.append(torch.tensor(0.0))
             if per_class_accs:
                 for metal, acc, pre, count in zip(metals, per_class_accs, per_class_prec, per_class_counts):
                     print(f"{metal:<4} | Recall: {acc.item():.3f} | Precision: {pre.item():.3f} | Count: {count}")

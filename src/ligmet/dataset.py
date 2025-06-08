@@ -441,7 +441,27 @@ class PreprocessedDataSet(torch.utils.data.Dataset):
             )
             + self.eps
         )
-        e_feats = torch.cat([onehot_type, dist_bin, covalent_bond, cos, sin], dim=1)
+        
+        # 🔹 Relative residue index embedding (with chain consideration)
+        residue_idx = torch.tensor(features.residue_idxs, dtype=torch.int64)
+        chain_ids = torch.tensor([hash(c) % 997 for c in features.chain_ids], dtype=torch.int64)  # hash to int
+        residue_idx_all = torch.cat([
+            residue_idx,
+            torch.full((len(features.grid_positions),), -999, dtype=torch.int64)
+        ])
+        chain_ids_all = torch.cat([
+            chain_ids,
+            torch.full((len(features.grid_positions),), -1, dtype=torch.int64)
+        ])
+
+        same_chain = chain_ids_all[edge_index_src] == chain_ids_all[edge_index_dst]
+        rel_idx = residue_idx_all[edge_index_src] - residue_idx_all[edge_index_dst]  # [E]
+        rel_idx = torch.clamp(rel_idx, -32, 32) + 32
+        rel_idx[~same_chain] = 64  # special index for inter-chain
+        rel_emb = self.relpos_embedding(rel_idx)  # [E, 8]
+
+        # 최종 edge feature
+        e_feats = torch.cat([onehot_type, dist_bin, covalent_bond, cos, sin, rel_emb], dim=1)
 
         return edge_index_src, edge_index_dst, e_feats, e_vec
     
