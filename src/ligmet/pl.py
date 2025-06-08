@@ -30,7 +30,11 @@ class LigMetModel(LightningModule):
         self.register_buffer(
             "metal_weight_focus", 
             torch.tensor([10000 / metal_counts.get(metal, 10000) for metal in metal_counts_focus], dtype=torch.float32)
-        )
+        ) 
+        self.register_buffer(
+            "metal_weight_focus", 
+            torch.tensor([1,1,1,1,1,1,1,1,1,0.3], dtype=torch.float32)
+        ) 
         self.register_buffer("pos_weight", torch.tensor([2], dtype=torch.float32))
         self.register_buffer("bin_weights", torch.tensor([1, 300, 1000], dtype=torch.float32))
 
@@ -38,7 +42,7 @@ class LigMetModel(LightningModule):
             "BCE": torch.nn.BCEWithLogitsLoss(pos_weight=self.pos_weight),#FocalLoss(alpha=0.5, reduction='mean'),#torch.nn.BCEWithLogitsLoss(pos_weight=self.pos_weight),#pos_weight=self.pos_weight, reduction='none'
             "Bin": torch.nn.CrossEntropyLoss(),#weight=self.bin_weights
             "CE": torch.nn.CrossEntropyLoss(weight=self.metal_weight),
-            "CEfocus": torch.nn.CrossEntropyLoss(weight=self.metal_weight_focus),#weight=self.metal_weight_focus
+            "CEfocus": torch.nn.CrossEntropyLoss(),#weight=self.metal_weight_focus
         })
         self.validation_step_outputs = []
         self.test_step_outputs = []
