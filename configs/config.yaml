@@ -50,7 +50,7 @@ model:
       output_dim: 32
       egnn_args:
         input_dim: 32
-        hidden_dim: 128
+        hidden_dim: 64
         num_layers: 5
         edge_feat_dim: 0
         output_dim: 32
@@ -82,7 +82,7 @@ model:
         attention:
           input_dim: 32
           embed_dim: 8
-          output_dim: 10
+          output_dim: 11
           num_heads: 4
           dropout_rate: 0.1
           num_layers: 5
