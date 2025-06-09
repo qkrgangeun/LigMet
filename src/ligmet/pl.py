@@ -233,7 +233,7 @@ class LigMetModel(LightningModule):
         print('pred',preds)
         threshold_metrics = []
         type_accuracy_by_threshold = []
-        np.savez(f"/home/qkrgangeun/LigMet/data/biolip/test/0526/test_last_{info.pdb_id[0]}.npz", pred=preds.cpu().numpy(), label=label.cpu().numpy(), type_pred=type_preds.cpu().numpy(), type_label=label[..., 1].long().cpu().numpy(), metal_positions=info.metal_positions.cpu().numpy(), metal_types=info.metal_types.cpu().numpy(), grid_positions=info.grids_positions.cpu().numpy())
+        np.savez(f"/home/qkrgangeun/LigMet/data/biolip_backup/test/0602/test_{info.pdb_id[0]}.npz", pred=preds.cpu().numpy(), label=label.cpu().numpy(), type_pred=type_preds.cpu().numpy(), type_label=label[..., 1].long().cpu().numpy(), metal_positions=info.metal_positions.cpu().numpy(), metal_types=info.metal_types.cpu().numpy(), grid_positions=info.grids_positions.cpu().numpy())
         for i in torch.arange(0.1,1.0,0.1):
             pred_05 = preds.squeeze() > i
             TP = torch.logical_and(label_05, pred_05).sum().item()
