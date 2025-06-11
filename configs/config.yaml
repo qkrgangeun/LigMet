@@ -1,7 +1,7 @@
 seed_everything: 42
 data:
   dataset_type: "preprocessed"
-  train_data_file: "/home/qkrgangeun/LigMet/code/text/biolip/filtered/train_pdbs_chain_1_filtered.txt"
+  train_data_file: "/home/qkrgangeun/LigMet/code/text/biolip/filtered/target_metals_plus.txt"
   val_data_file: "/home/qkrgangeun/LigMet/code/text/biolip/filtered/val_pdbs_filtered.txt"
   test_data_file: "/home/qkrgangeun/LigMet/data/biolip_backup/pdb/test_pdb_noerror.txt"
 
@@ -45,50 +45,50 @@ model:
   model_config:
     encoder_args:
       input_dim: 230 
-      hidden_dim: 64
+      hidden_dim: 128
       dropout_rate: 0.1
-      output_dim: 32
+      output_dim: 64
       egnn_args:
-        input_dim: 32
-        hidden_dim: 64
+        input_dim: 64
+        hidden_dim: 128
         num_layers: 5
         edge_feat_dim: 0
-        output_dim: 32
+        output_dim: 64
         dropout_rate: 0.1
 
     decoder_args:
       use_attention_prob: False
       use_attention_type: False
       binning_layer_args:
-        input_dim: 32
+        input_dim: 64
         output_dim: 3  
         num_layers: 3   
         dropout_rate: 0.5
       prob_transform_args:
         attention:
-          input_dim: 32
+          input_dim: 64
           embed_dim: 16
           output_dim: 1
           num_heads: 4
           dropout_rate: 0.1
           num_layers: 5
         linear:
-          input_dim: 32
+          input_dim: 64
           output_dim: 1
           num_layers: 5
           dropout_rate: 0.1
 
       type_transform_args:
         attention:
-          input_dim: 32
+          input_dim: 64
           embed_dim: 8
-          output_dim: 11
+          output_dim: 10
           num_heads: 4
           dropout_rate: 0.1
           num_layers: 5
         linear:
-          input_dim: 32
-          output_dim: 11
+          input_dim: 64
+          output_dim: 10
           num_layers: 5
           dropout_rate: 0.1
 
@@ -104,12 +104,12 @@ trainer:
     class_path: lightning.pytorch.loggers.WandbLogger
     init_args:
       project: "LigMet"
-      name: "test_0602distributed"
+      name: "0611distributed_plusmetal"
   callbacks:
   - class_path: lightning.pytorch.callbacks.ModelCheckpoint
     init_args:
       dirpath: "checkpoints"
-      filename: "test_0602distributed-{epoch:02d}"
+      filename: "0611distributed_plusmetal-{epoch:02d}"
       monitor: "val_loss"
       mode: "min"
       save_top_k: 3
