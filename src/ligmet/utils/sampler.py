@@ -44,8 +44,8 @@ class WeightedSampler(Sampler):
         # 가장 희귀한 metal 기준으로 weight 계산
         pdb_to_weight = {}
         for pdb_id, metal_list in pdb_metal_map.items():
-            # weights = [1 / metal_counts[metal] for metal in metal_list if metal in metal_counts]
-            weights = [1 / math.sqrt(metal_counts[metal]) for metal in metal_list if metal in metal_counts]
+            weights = [1 / metal_counts[metal] for metal in metal_list if metal in metal_counts]
+            # weights = [1 / math.sqrt(metal_counts[metal]) for metal in metal_list if metal in metal_counts]
             pdb_to_weight[pdb_id] = max(weights) if weights else 0.0
 
         # Dataset 순서에 맞게 weight 리스트 생성

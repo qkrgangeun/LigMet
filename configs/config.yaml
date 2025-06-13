@@ -1,7 +1,7 @@
 seed_everything: 42
 data:
   dataset_type: "preprocessed"
-  train_data_file: "/home/qkrgangeun/LigMet/code/text/biolip/filtered/target_metals_plus.txt"
+  train_data_file: "/home/qkrgangeun/LigMet/code/text/biolip/paper/train_pdbs_filtered.txt"
   val_data_file: "/home/qkrgangeun/LigMet/code/text/biolip/filtered/val_pdbs_filtered.txt"
   test_data_file: "/home/qkrgangeun/LigMet/data/biolip_backup/pdb/test_pdb_noerror.txt"
 
@@ -23,13 +23,13 @@ data:
 
   
   train_loader_params:
-    batch_size: 8
+    batch_size: 4
     num_workers: 0
     shuffle: False
     pin_memory: False
 
   val_loader_params:
-    batch_size: 8
+    batch_size: 4
     num_workers: 0
     shuffle: False
     pin_memory: False
@@ -104,12 +104,12 @@ trainer:
     class_path: lightning.pytorch.loggers.WandbLogger
     init_args:
       project: "LigMet"
-      name: "0611distributed_plusmetal"
+      name: "0613_all_sampler1"
   callbacks:
   - class_path: lightning.pytorch.callbacks.ModelCheckpoint
     init_args:
       dirpath: "checkpoints"
-      filename: "0611distributed_plusmetal-{epoch:02d}"
+      filename: "0613_all_sampler1-{epoch:02d}"
       monitor: "val_loss"
       mode: "min"
       save_top_k: 3
