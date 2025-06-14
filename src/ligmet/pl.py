@@ -41,7 +41,7 @@ class LigMetModel(LightningModule):
         self.loss_fns = nn.ModuleDict({
             "BCE": torch.nn.BCEWithLogitsLoss(pos_weight=self.pos_weight),#FocalLoss(alpha=0.5, reduction='mean'),#torch.nn.BCEWithLogitsLoss(pos_weight=self.pos_weight),#pos_weight=self.pos_weight, reduction='none'
             "Bin": torch.nn.CrossEntropyLoss(),#weight=self.bin_weights
-            "CE": torch.nn.CrossEntropyLoss(weight=self.metal_weight),
+            "CE": torch.nn.CrossEntropyLoss(),#weight=self.metal_weight
             "CEfocus": torch.nn.CrossEntropyLoss(),#weight=self.metal_weight_focus
         })
         self.validation_step_outputs = []
@@ -400,7 +400,7 @@ class LigMetDataModule(LightningDataModule):
         print(f"Train file: {self.train_data_file}")
 
     def train_dataloader(self):
-        sampler = DistributedSampler(self.train_dataset, shuffle=True)  # DistributedSampler 추가 WeightedSampler
+        sampler = WeightedSampler(self.train_dataset, shuffle=True)  # DistributedSampler 추가 WeightedSampler
         if isinstance(sampler, torch.utils.data.DistributedSampler):
             print('Sampler: DistributedSampler')
         else:
