@@ -23,13 +23,13 @@ data:
 
   
   train_loader_params:
-    batch_size: 4
+    batch_size: 2
     num_workers: 0
     shuffle: False
     pin_memory: False
 
   val_loader_params:
-    batch_size: 4
+    batch_size: 2
     num_workers: 0
     shuffle: False
     pin_memory: False
@@ -104,12 +104,12 @@ trainer:
     class_path: lightning.pytorch.loggers.WandbLogger
     init_args:
       project: "LigMet"
-      name: "0614_all_logsampler"
+      name: "0615_all_logsampler_batch2"
   callbacks:
   - class_path: lightning.pytorch.callbacks.ModelCheckpoint
     init_args:
       dirpath: "checkpoints"
-      filename: "0614_all_logsampler-{epoch:02d}"
+      filename: "0615_all_logsampler_batch2-{epoch:02d}"
       monitor: "val_loss"
       mode: "min"
       save_top_k: 5

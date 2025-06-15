@@ -400,7 +400,7 @@ class LigMetDataModule(LightningDataModule):
         print(f"Train file: {self.train_data_file}")
 
     def train_dataloader(self):
-        sampler = WeightedSampler(self.train_dataset, shuffle=True)  # DistributedSampler 추가 WeightedSampler
+        sampler = WeightedSampler(self.train_dataset, shuffle=True, total_samples=20000)  # DistributedSampler 추가 WeightedSampler
         if isinstance(sampler, torch.utils.data.DistributedSampler):
             print('Sampler: DistributedSampler')
         else:
