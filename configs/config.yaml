@@ -23,13 +23,13 @@ data:
 
   
   train_loader_params:
-    batch_size: 4
+    batch_size: 2
     num_workers: 0
     shuffle: False
     pin_memory: False
 
   val_loader_params:
-    batch_size: 4
+    batch_size: 2
     num_workers: 0
     shuffle: False
     pin_memory: False
@@ -93,23 +93,23 @@ model:
           dropout_rate: 0.1
 
 trainer:
-  max_epochs: 50
+  max_epochs: 100
   accelerator: auto
   devices: auto
   enable_progress_bar: True
   detect_anomaly: True
-  accumulate_grad_batches: 8 
+  accumulate_grad_batches: 32 
   strategy: "ddp_find_unused_parameters_true"
   logger:
     class_path: lightning.pytorch.loggers.WandbLogger
     init_args:
       project: "LigMet"
-      name: "0614_all_logsampler"
+      name: "0620_all_logsampler"
   callbacks:
   - class_path: lightning.pytorch.callbacks.ModelCheckpoint
     init_args:
       dirpath: "checkpoints"
-      filename: "0614_all_logsampler-{epoch:02d}"
+      filename: "0620_all_logsampler-{epoch:02d}"
       monitor: "val_loss"
       mode: "min"
       save_top_k: 5

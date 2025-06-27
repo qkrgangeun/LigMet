@@ -12,7 +12,8 @@ output_dir = Path('/home/qkrgangeun/LigMet/data/biolip/dl/features')  # .npz 저
 #metalpred
 # pdb_dir = Path('/home/qkrgangeun/MetalPred/data/biolip_group/latest')  # PDB 파일이 있는 디렉토리
 # output_dir = Path('/home/qkrgangeun/LigMet/data/metalpred/dl/features')  
-
+pdb_dir = Path('/home/qkrgangeun/LigMet/data/biolip_backup/af2.3/testset_chain1')  # PDB 파일이 있는 디렉토리
+output_dir = Path('/home/qkrgangeun/LigMet/data/biolip_backup/af2.3/testset_chain1/dl/features')  # .npz 저장할 디렉토리
 output_dir.mkdir(parents=True, exist_ok=True)  # 저장 폴더 생성 (없으면 생성)
 
 
