@@ -33,14 +33,14 @@ class Features():
     residue_idxs: np.ndarray    #(n_atoms,1)
     chain_ids: np.ndarray   #(n_atoms,1)
     is_ligand: np.ndarray   #(n_atoms,1)
-    metal_positions: np.ndarray     #(n_atoms,1)
-    metal_types: np.ndarray     #(n_atoms,1)
     grid_positions:np.ndarray   #(n_atoms,1)
     sasas: np.ndarray   #(n_atoms,1)
     qs: np.ndarray  #(n_atoms,1)
     sec_structs: np.ndarray     #(n_atoms,1)
     gen_types: np.ndarray
     bond_masks: np.ndarray  #(n_atoms,n_atoms)
+    metal_positions: Optional[np.ndarray] = None     #(n_atoms,1)
+    metal_types: Optional[np.ndarray] = None     #(n_atoms,1)
 
 @dataclass
 class Info():
@@ -372,6 +372,32 @@ def make_gentype(structure: Features, ligand_mol):
     # print(gentype)
     # print(lig_gentype)
     return gentype
+
+def bondmask_to_neighidx(bond_mask: np.ndarray) -> np.ndarray:
+    rows, cols = np.where(np.triu(bond_mask) > 0)
+    return np.stack([rows, cols], axis=0).astype(np.int32)
+
+def optimize_dtype(key, arr):
+    if key == "bond_masks":
+        return bondmask_to_neighidx(arr)
+    elif key in ["atom_positions", "metal_positions", "grid_positions", "qs", "sasas"]:
+        return arr.astype(np.float32)
+    elif key == "residue_idxs":
+        return arr.astype(np.int32)
+    elif key in ["sec_structs", "gen_types"]:
+        return arr.astype(np.int16)
+    elif key == "is_ligand":
+        return arr.astype(np.bool_)
+    elif key in ["atom_elements", "atom_residues"]:
+        return arr.astype("<U3")
+    elif key == "atom_names":
+        return arr.astype("<U4")
+    elif key == "chain_ids":
+        return arr.astype("<U1")
+    elif arr.dtype.kind == "U":
+        maxlen = max(len(str(s)) for s in arr)
+        return arr.astype(f"<U{maxlen}")
+    return arr
 
 def make_features(pdb_path: Optional[Path], structure: StructureWithGrid) -> Optional[Features]: # type: ignore
     print('\n')

@@ -233,7 +233,27 @@ class LigMetModel(LightningModule):
         print('pred',preds)
         threshold_metrics = []
         type_accuracy_by_threshold = []
-        np.savez(f"/home/qkrgangeun/LigMet/data/biolip_backup/test/0602/test_{info.pdb_id[0]}.npz", pred=preds.cpu().numpy(), label=label.cpu().numpy(), type_pred=type_preds.cpu().numpy(), type_label=label[..., 1].long().cpu().numpy(), metal_positions=info.metal_positions.cpu().numpy(), metal_types=info.metal_types.cpu().numpy(), grid_positions=info.grids_positions.cpu().numpy())
+        
+        dm = self.trainer.datamodule
+        base_dir = Path(dm.dl_test_result_dir)
+        base_dir.mkdir(parents=True, exist_ok=True)
+
+        # 2) PDB ID 별 하위 디렉터리 또는 파일 패스 결정
+        pdb_id = info.pdb_id[0]  # e.g. '1abc'
+        out_path = base_dir / f"test_{pdb_id}.npz"
+
+        # 3) 결과 저장
+        np.savez(
+            out_path,
+            pred=preds.cpu().numpy(),
+            label=label.cpu().numpy(),
+            type_pred=type_preds.cpu().numpy(),
+            type_label=label[..., 1].long().cpu().numpy(),
+            metal_positions=info.metal_positions.cpu().numpy(),
+            metal_types=info.metal_types.cpu().numpy(),
+            grid_positions=info.grids_positions.cpu().numpy()
+        )
+        
         for i in torch.arange(0.1,1.0,0.1):
             pred_05 = preds.squeeze() > i
             TP = torch.logical_and(label_05, pred_05).sum().item()
@@ -336,6 +356,7 @@ class LigMetDataModule(LightningDataModule):
         train_data_file: str,
         val_data_file: str,
         test_data_file: str,
+        dl_test_result_dir: str,
         preprocessed: dict,
         onthefly: dict,
         train_loader_params: dict,
@@ -351,7 +372,7 @@ class LigMetDataModule(LightningDataModule):
         self.train_data_file = train_data_file
         self.val_data_file = val_data_file
         self.test_data_file = test_data_file
-
+        self.dl_test_result_dir = dl_test_result_dir
         self.preprocessed = preprocessed
         self.onthefly = onthefly
 

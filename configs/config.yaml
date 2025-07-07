@@ -3,25 +3,25 @@ data:
   dataset_type: "preprocessed"
   train_data_file: "/home/qkrgangeun/LigMet/code/text/biolip/paper/train_pdbs_filtered.txt"
   val_data_file: "/home/qkrgangeun/LigMet/code/text/biolip/filtered/val_pdbs_filtered.txt"
-  test_data_file: "/home/qkrgangeun/LigMet/data/biolip_backup/pdb/test_pdb_noerror.txt"
-
+  test_data_file: "/home/qkrgangeun/LigMet/data/biolip_backup/af2.3/testset_chain1/af2_model.txt"
+  dl_test_result_dir: "home/qkrgangeun/LigMet/data/biolip_backup/test/0627"
   preprocessed:
-    features_dir: "/home/qkrgangeun/LigMet/data/biolip/dl/features"
-    rf_result_dir: "/home/qkrgangeun/LigMet/data/biolip/rf/grid_prob"
+    features_dir: "/home/qkrgangeun/LigMet/data/biolip_backup/af2.3/testset_chain1/dl/features"
+    rf_result_dir: "/home/qkrgangeun/LigMet/data/biolip_backup/af2.3/testset_chain1/rf/grid_prob"
+    metal_dir: "/home/qkrgangeun/LigMet/data/biolip_backup/metal_dir"
     topk: 16
     edge_dist_cutoff: 15
     pocket_dist: 3
     rf_threshold: 0.5
 
   onthefly:
-    pdb_dir: "/home/qkrgangeun/LigMet/data/biolip/pdb"
-    rf_model: "/home/qkrgangeun/LigMet/data/biolip/rf/rf_param/example.param"
+    pdb_dir: "/home/qkrgangeun/LigMet/data/biolip_backup/af2.3/testset_chain1/model"
+    rf_model: "/home/qkrgangeun/LigMet/data/rf_param/0415_newlabel_chain1"
     topk: 16
     edge_dist_cutoff: 4.5
     pocket_dist: 6
     rf_threshold: 1.0
 
-  
   train_loader_params:
     batch_size: 2
     num_workers: 0

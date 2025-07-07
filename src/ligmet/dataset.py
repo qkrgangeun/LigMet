@@ -13,7 +13,7 @@ from dataclasses import asdict
 import math
 from tqdm import tqdm
 class PreprocessedDataSet(torch.utils.data.Dataset):
-    def __init__(self, data_file: str, features_dir: str, rf_result_dir: str,topk: int, edge_dist_cutoff: float, pocket_dist: float, rf_threshold: float, eps=1e-6):
+    def __init__(self, data_file: str, features_dir: str, metal_dir, rf_result_dir: str,topk: int, edge_dist_cutoff: float, pocket_dist: float, rf_threshold: float, eps=1e-6):
         super().__init__()
         self.data_file=Path(data_file)
         self.features_dir=Path(features_dir)
@@ -25,7 +25,7 @@ class PreprocessedDataSet(torch.utils.data.Dataset):
         self.pdbid_lists=[pdb.strip().split(".pdb")[0] for pdb in open(data_file) if (self.features_dir / f"{pdb.strip().split('.pdb')[0]}.npz").exists()]
         self.eps = eps
         self.alpha = 4/math.log(2) #5.77078
-        self.metal_dir = Path('/home/qkrgangeun/LigMet/data/biolip/metal_label')
+        self.metal_dir = metal_dir
         print(self.features_dir)
     def __len__(self):
         return len(self.pdbid_lists)
@@ -33,16 +33,21 @@ class PreprocessedDataSet(torch.utils.data.Dataset):
     def __getitem__(self, index:int):
         G = []
         L = []
+        
         pdb_id = self.pdbid_lists[index]
         feature_path = self.features_dir / f"{pdb_id}.npz"
-        # print(feature_path)
         rf_result_path = self.rf_result_dir / f"{pdb_id}.npz"
+        
         data = np.load(feature_path,allow_pickle=True)
-        metal = np.load(self.metal_dir/f"{pdb_id}.npz", allow_pickle=True)
-        # print(self.metal_dir/f"{pdb_id}.npz")
+        # metal = np.load(self.metal_dir/f"{pdb_id}.npz", allow_pickle=True)
+
         features = Features(**data)
-        features.metal_positions = metal["metal_positions"]
-        features.metal_types = metal["metal_types"]
+        if self.metal_dir is not None:
+            metal_path = Path(f"{self.metal_dir}/{pdb_id}.npz")
+            if metal_path.exists():
+                metal = np.load(metal_path, allow_pickle=True)
+                features.metal_positions = metal["metal_positions"]
+                features.metal_types     = metal["metal_types"]
         ##metalpred## -> should # 2 above line
         
         if len(features.atom_positions) != len(features.atom_elements):
@@ -61,8 +66,8 @@ class PreprocessedDataSet(torch.utils.data.Dataset):
         #########
         grid_mask = grid_probs >= self.rf_threshold
         grids_after_rf = grid_positions[grid_mask]
-
-        grids_after_rf = np.concatenate((grids_after_rf,features.metal_positions),axis=0)
+        if features.metal_positions is not None:
+            grids_after_rf = np.concatenate((grids_after_rf,features.metal_positions),axis=0)
         features.grid_positions = grids_after_rf
         # features_p, pocket_exist = self.find_pocket(features, grids_after_rf)
         
@@ -81,8 +86,8 @@ class PreprocessedDataSet(torch.utils.data.Dataset):
         info = Info(
             pdb_id=np.array(pdb_id),
             grids_positions=torch.tensor(grids_after_rf, dtype=torch.float32),
-            metal_positions=torch.tensor(features.metal_positions, dtype=torch.float32),
-            metal_types=torch.tensor([metals.index(metal) for metal in features.metal_types]),
+            metal_positions=torch.tensor(features.metal_positions, dtype=torch.float32) if features.metal_positions else None,
+            metal_types=torch.tensor([metals.index(metal) for metal in features.metal_types]) if features.metal_types else None,
         )
         return G, L, info
 
@@ -167,14 +172,22 @@ class PreprocessedDataSet(torch.utils.data.Dataset):
         )
         return c_features, True
     
-    def make_label(self, features:Features)->Union[torch.Tensor, torch.Tensor, torch.Tensor]:
+    def make_label(self, features: Features) -> Union[torch.Tensor, torch.Tensor, torch.Tensor]:
         grid = np.array(features.grid_positions, dtype=np.float32)
         grids = torch.from_numpy(grid)
+        num_grids = grids.shape[0]
+
+        if features.metal_positions is None:
+            label_prob = torch.zeros(num_grids, dtype=torch.float32)
+            label_type = torch.full((num_grids,), len(metals), dtype=torch.long)
+            label_vector = torch.zeros(num_grids, 3, dtype=torch.float32)
+            return label_prob, label_type, label_vector
+
         metal_pos = torch.from_numpy(features.metal_positions)
         metal_types = torch.tensor([metals.index(metal) for metal in features.metal_types])
 
-        diff = grids.unsqueeze(1) - metal_pos.unsqueeze(0)  # [g,m,3]
-        dist = torch.sqrt(torch.sum(diff**2, dim=-1)) + self.eps  # [g,m]
+        diff = grids.unsqueeze(1) - metal_pos.unsqueeze(0)  # [g, m, 3]
+        dist = torch.sqrt(torch.sum(diff**2, dim=-1)) + self.eps  # [g, m]
 
         exp_dist = torch.exp(-(dist**2) / self.alpha)
         label_p, _ = torch.max(exp_dist, dim=-1)
@@ -182,11 +195,12 @@ class PreprocessedDataSet(torch.utils.data.Dataset):
 
         min_dist, min_idx = torch.min(dist, dim=-1)  # [g,]
         label_type = torch.where(
-            min_dist <= 2.0, metal_types[min_idx], torch.tensor(len(metals))
+            min_dist <= 2.0, metal_types[min_idx], torch.tensor(len(metals), device=min_idx.device)
         )
         label_vector = diff[torch.arange(diff.size(0)), min_idx]
-        
+
         return label_prob, label_type, label_vector
+
     
     def make_graph(self, features: Features) -> dgl.DGLGraph:
         xyz = torch.tensor(np.concatenate([features.atom_positions, features.grid_positions]))
@@ -454,15 +468,16 @@ class PreprocessedDataSet(torch.utils.data.Dataset):
                 graphs.extend(G)  # 각 샘플의 그래프 리스트를 하나의 리스트로 결합
                 labels.extend(L)  # 각 샘플의 결합된 라벨 리스트를 하나의 리스트로 결합
                 g_pos.append(info.grids_positions)
-                m_pos.append(info.metal_positions)
-                m_types.append(info.metal_types)
+                m_pos.append(info.metal_positions if info.metal_positions else torch.Tensor([0,0,0]))
+                m_types.append(info.metal_types if info.metal_types else torch.Tensor([-1]))
                 pdb_ids.append(info.pdb_id)
         # 배치 그래프와 배치 라벨 생성
         batched_graphs = dgl.batch(graphs)  # shape [B*N]
         batched_labels = torch.cat(labels, dim=0)  # shape [B*N,2]
         g_poss = torch.cat(g_pos, dim=0)
-        m_poss = torch.cat(m_pos, dim=0)
-        m_typess = torch.cat(m_types, dim=0)
+        print(m_pos, m_types)
+        m_poss = torch.cat(m_pos, dim=0) 
+        m_typess = torch.cat(m_types, dim=0) 
         pdb_idss = np.array(pdb_ids)
         batched_infos = Info(
             pdb_id=pdb_idss,
