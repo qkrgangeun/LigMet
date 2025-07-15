@@ -37,8 +37,8 @@ class LigMetModel(LightningModule):
         self.loss_fns = nn.ModuleDict({
             "BCE": torch.nn.BCEWithLogitsLoss(pos_weight=self.pos_weight),#FocalLoss(alpha=0.5, reduction='mean'),#torch.nn.BCEWithLogitsLoss(pos_weight=self.pos_weight),#pos_weight=self.pos_weight, reduction='none'
             "Bin": torch.nn.CrossEntropyLoss(),#weight=self.bin_weights
-            "CE": torch.nn.CrossEntropyLoss(),#weight=self.metal_weight
-            "CEfocus": torch.nn.CrossEntropyLoss(),#weight=self.metal_weight_focus
+            "CE": torch.nn.CrossEntropyLoss(weight=self.metal_weight),#weight=self.metal_weight
+            "CEfocus": torch.nn.CrossEntropyLoss(weight=self.metal_weight_focus),#weight=self.metal_weight_focus
         })
         self.validation_step_outputs = []
         self.test_step_outputs = []
@@ -241,7 +241,7 @@ class LigMetModel(LightningModule):
         # 2) PDB ID 별 하위 디렉터리 또는 파일 패스 결정
         pdb_id = info.pdb_id[0]  # e.g. '1abc'
         out_path = base_dir / f"test_{pdb_id}.npz"
-
+        print('SAVE ',out_path)
         # 3) 결과 저장
         np.savez(
             out_path,

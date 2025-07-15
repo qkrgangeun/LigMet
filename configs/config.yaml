@@ -4,7 +4,7 @@ data:
   train_data_file: "/home/qkrgangeun/LigMet/code/text/biolip/paper/train_pdbs_filtered.txt"
   val_data_file: "/home/qkrgangeun/LigMet/code/text/biolip/filtered/val_pdbs_filtered.txt"
   test_data_file: "/home/qkrgangeun/LigMet/data/biolip_backup/af2.3/testset_chain1/af2_model.txt"
-  dl_test_result_dir: "home/qkrgangeun/LigMet/data/biolip_backup/test/0627"
+  dl_test_result_dir: "/home/qkrgangeun/LigMet/data/biolip_backup/test/af2.3"
   preprocessed:
     features_dir: "/home/qkrgangeun/LigMet/data/biolip_backup/af2.3/testset_chain1/dl/features"
     rf_result_dir: "/home/qkrgangeun/LigMet/data/biolip_backup/af2.3/testset_chain1/rf/grid_prob"
@@ -45,50 +45,50 @@ model:
   model_config:
     encoder_args:
       input_dim: 230 
-      hidden_dim: 128
+      hidden_dim: 64
       dropout_rate: 0.1
-      output_dim: 64
+      output_dim: 32
       egnn_args:
-        input_dim: 64
-        hidden_dim: 128
+        input_dim: 32
+        hidden_dim: 64
         num_layers: 5
         edge_feat_dim: 0
-        output_dim: 64
+        output_dim: 32
         dropout_rate: 0.1
 
     decoder_args:
       use_attention_prob: False
       use_attention_type: False
       binning_layer_args:
-        input_dim: 64
+        input_dim: 32
         output_dim: 3  
         num_layers: 3   
         dropout_rate: 0.5
       prob_transform_args:
         attention:
-          input_dim: 64
+          input_dim: 32
           embed_dim: 16
           output_dim: 1
           num_heads: 4
           dropout_rate: 0.1
           num_layers: 5
         linear:
-          input_dim: 64
+          input_dim: 32
           output_dim: 1
           num_layers: 5
           dropout_rate: 0.1
 
       type_transform_args:
         attention:
-          input_dim: 64
+          input_dim: 32
           embed_dim: 8
-          output_dim: 10
+          output_dim: 11
           num_heads: 4
           dropout_rate: 0.1
           num_layers: 5
         linear:
-          input_dim: 64
-          output_dim: 10
+          input_dim: 32
+          output_dim: 11
           num_layers: 5
           dropout_rate: 0.1
 
