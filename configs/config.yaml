@@ -45,11 +45,11 @@ model:
   model_config:
     encoder_args:
       input_dim: 230 
-      hidden_dim: 128
+      hidden_dim: 64
       dropout_rate: 0.1
       output_dim: 64
       egnn_args:
-        input_dim: 32
+        input_dim: 64
         hidden_dim: 64
         num_layers: 5
         edge_feat_dim: 0
@@ -87,7 +87,7 @@ model:
           dropout_rate: 0.1
           num_layers: 5
         linear:
-          input_dim: 32
+          input_dim: 64
           output_dim: 10
           num_layers: 5
           dropout_rate: 0.1
