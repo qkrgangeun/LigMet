@@ -31,10 +31,7 @@ class LigMetModel(LightningModule):
             "metal_weight_focus", 
             torch.tensor([10000 / metal_counts.get(metal, 10000) for metal in metal_counts_focus], dtype=torch.float32)
         ) 
-        self.register_buffer(
-            "metal_weight_focus", 
-            torch.tensor([1,1,1,1,1,1,1,1,1,0.3], dtype=torch.float32)
-        ) 
+
         self.register_buffer("pos_weight", torch.tensor([2], dtype=torch.float32))
         self.register_buffer("bin_weights", torch.tensor([1, 300, 1000], dtype=torch.float32))
 
@@ -85,7 +82,7 @@ class LigMetModel(LightningModule):
                 ce_focus_loss = self.loss_fns["CEfocus"](local_type_pred, local_label)
                 # label_zero_mask = torch.where(torch.nn.functional.one_hot(local_label,num_classes=local_type_pred.shape[-1])==1,ce_focus_loss, 0.01*ce_focus_loss)
                 logs["CE Focus Loss"] = ce_focus_loss.item()
-                loss += ce_focus_loss
+                loss += 2*ce_focus_loss
 
         # if bin_pred is not None:
         #     bin_label = (label[..., 0] > 0.75).long() + (label[..., 0] > 0.5).long()
@@ -110,9 +107,9 @@ class LigMetModel(LightningModule):
         #     label[..., 2:5],
         # )
         total_loss, logs = self.compute_loss(pred[grididx], label, type_pred[grididx], bin_pred[grididx])
-        self.log("train_loss", total_loss, on_epoch=True, prog_bar=True, sync_dist=False)
+        self.log("train_loss", total_loss, on_epoch=True, prog_bar=False, sync_dist=False)
         for key in logs:
-            self.log(f"train_{key}", logs[key], on_epoch=True, prog_bar=True, sync_dist=False)
+            self.log(f"train_{key}", logs[key], on_epoch=True, prog_bar=False, sync_dist=False)
         return total_loss
 
     def validation_step(self, batch, batch_idx):
@@ -129,8 +126,8 @@ class LigMetModel(LightningModule):
         preds , type_preds, bin_preds = pred[grididx], type_pred[grididx], bin_pred[grididx]
         total_loss, logs = self.compute_loss(preds, label, type_preds, bin_preds)
         for key in logs:
-            self.log(f"val_{key}", logs[key], on_epoch=True, prog_bar=True, sync_dist=False)
-        self.log("val_loss", total_loss, on_epoch=True, prog_bar=True, sync_dist=False)
+            self.log(f"val_{key}", logs[key], on_epoch=True, prog_bar=False, sync_dist=False)
+        self.log("val_loss", total_loss, on_epoch=True, prog_bar=False, sync_dist=False)
         
         #Metrics
         label_05 = label[...,0] > 0.5
@@ -422,8 +419,8 @@ class LigMetDataModule(LightningDataModule):
         print(f"Train file: {self.train_data_file}")
 
     def train_dataloader(self):
-        sampler = WeightedSampler(self.train_dataset, shuffle=True, total_samples=20000)  # DistributedSampler 추가 WeightedSampler
-        sampler = WeightedSampler(self.train_dataset, shuffle=True, total_samples=20000)  # DistributedSampler 추가 WeightedSampler
+        # sampler = WeightedSampler(self.train_dataset, shuffle=True, total_samples=20000)  # DistributedSampler 추가 WeightedSampler
+        sampler = DistributedSampler(self.train_dataset, shuffle=True)  # DistributedSampler 사용
         if isinstance(sampler, torch.utils.data.DistributedSampler):
             print('Sampler: DistributedSampler')
         else:
