@@ -29,32 +29,41 @@ def load_data(train_data_path, test_data_path, label_column='label_2.0'):
 
     # Read train data
     train_data = [pdb_id.strip() for pdb_id in open(train_data_path, 'r')]
+    af_train_data = [pdb_id.strip() for pdb_id in open('/home/qkrgangeun/LigMet/data/biolip_backup/af2.3/train/af_trainset.txt', 'r')]
+
     for pdb_id in tqdm(train_data):
  # Assuming the 'pdb_id' column is in the train data
-        data_path = f"/home/qkrgangeun/LigMet/data/biolip/rf/features/{pdb_id}.csv.gz"
+        data_path = f"/home/qkrgangeun/LigMet/data/biolip_backup/rf/features/{pdb_id}.csv.gz"
         data = pd.read_csv(data_path, compression='gzip')  # Read the corresponding .csv.gz file without extracting
-
         # Drop the label column and append to features
+        X_train_list.append(data.drop([label_column], axis=1))
+        Y_train_list.append(data[label_column])
+        
+    for af_pdb_id in tqdm(af_train_data):
+        data_path = f"/home/qkrgangeun/LigMet/data/biolip_backup/af2.3/train/rf/features/AF_{af_pdb_id}.csv.gz"
+        data = pd.read_csv(data_path, compression='gzip')
         X_train_list.append(data.drop([label_column], axis=1))
         Y_train_list.append(data[label_column])
     print('--train data loaded')
     # Read test data
-    test_data = [pdb_id.strip() for pdb_id in open(test_data_path, 'r')]
-    for pdb_id in test_data:
-        data_path = f"/home/qkrgangeun/LigMet/data/biolip/rf/features/{pdb_id}.csv.gz"
-        data = pd.read_csv(data_path, compression='gzip')  # Read the corresponding .csv.gz file without extracting
+    # test_data = [pdb_id.strip() for pdb_id in open(test_data_path, 'r')]
+    # for pdb_id in test_data:
+    #     data_path = f"/home/qkrgangeun/LigMet/data/biolip/rf/features/{pdb_id}.csv.gz"
+    #     data = pd.read_csv(data_path, compression='gzip')  # Read the corresponding .csv.gz file without extracting
 
-        # Drop the label column and append to features
-        X_test_list.append(data.drop([label_column], axis=1))
-        Y_test_list.append(data[label_column])
-    print('--test data loaded')
+    #     # Drop the label column and append to features
+    #     X_test_list.append(data.drop([label_column], axis=1))
+    #     Y_test_list.append(data[label_column])
+    # print('--test data loaded')
     # Concatenate all data into DataFrames
     X_train = pd.concat(X_train_list, ignore_index=True)
     Y_train = pd.concat(Y_train_list, ignore_index=True)
-    X_test = pd.concat(X_test_list, ignore_index=True)
-    Y_test = pd.concat(Y_test_list, ignore_index=True)
-
+    # X_test = pd.concat(X_test_list, ignore_index=True)
+    # Y_test = pd.concat(Y_test_list, ignore_index=True)
+    X_test = []
+    Y_test = []
     return X_train, Y_train, X_test, Y_test
+
 def train(model_path, X_train, Y_train):
     """ Train a BalancedRandomForestClassifier and save the model """
     rf = BalancedRandomForestClassifier(random_state=42, n_jobs=-1)
