@@ -8,6 +8,7 @@ from pathlib import Path
 def load_data(pdb_id, label_column='label_2.0'):
     """테스트 데이터 로드 및 전처리"""
     data_path = f"/home/qkrgangeun/LigMet/data/biolip/rf/features/{pdb_id}.csv.gz"
+    data_path = f"/home/qkrgangeun/LigMet/data/biolip_backup/af2.3/testset_chain1/rl/features/{pdb_id}.csv.gz"
     data = pd.read_csv(data_path, compression='gzip')
     X = data.drop([label_column], axis=1)
     Y = data[label_column]
@@ -16,6 +17,7 @@ def load_data(pdb_id, label_column='label_2.0'):
 def save_predicted_grids(pdb_id, y_pred, output_dir):
     """True로 예측된 grid의 위치를 .xyz 파일로 저장"""
     npz_path = f"/home/qkrgangeun/LigMet/data/biolip/dl/features/{pdb_id}.npz"
+    npz_path = f"/home/qkrgangeun/LigMet/data/biolip_backup/af2.3/testset_chain1/dl/features/{pdb_id}.npz"
     df = np.load(npz_path)
     grid_positions = df["grid_positions"]
     true_grid_positions = grid_positions[y_pred == 1]

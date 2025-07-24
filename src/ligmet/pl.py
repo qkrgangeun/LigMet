@@ -41,8 +41,8 @@ class LigMetModel(LightningModule):
         self.loss_fns = nn.ModuleDict({
             "BCE": torch.nn.BCEWithLogitsLoss(pos_weight=self.pos_weight),#FocalLoss(alpha=0.5, reduction='mean'),#torch.nn.BCEWithLogitsLoss(pos_weight=self.pos_weight),#pos_weight=self.pos_weight, reduction='none'
             "Bin": torch.nn.CrossEntropyLoss(),#weight=self.bin_weights
-            "CE": torch.nn.CrossEntropyLoss(),#weight=self.metal_weight
-            "CEfocus": torch.nn.CrossEntropyLoss(),#weight=self.metal_weight_focus
+            "CE": torch.nn.CrossEntropyLoss(weight=self.metal_weight),#weight=self.metal_weight
+            "CEfocus": torch.nn.CrossEntropyLoss(weight=self.metal_weight_focus),#weight=self.metal_weight_focus
         })
         self.validation_step_outputs = []
         self.test_step_outputs = []
@@ -209,6 +209,7 @@ class LigMetModel(LightningModule):
                 else:
                     per_class_accs.append(torch.tensor(0.0))  # 또는 생략 가능
                     per_class_prec.append(torch.tensor(0.0))
+                    per_class_prec.append(torch.tensor(0.0))
             if per_class_accs:
                 for metal, acc, pre, count in zip(metals, per_class_accs, per_class_prec, per_class_counts):
                     print(f"{metal:<4} | Recall: {acc.item():.3f} | Precision: {pre.item():.3f} | Count: {count}")
@@ -237,7 +238,27 @@ class LigMetModel(LightningModule):
         print('pred',preds)
         threshold_metrics = []
         type_accuracy_by_threshold = []
-        np.savez(f"/home/qkrgangeun/LigMet/data/biolip/test/0526/test_last_{info.pdb_id[0]}.npz", pred=preds.cpu().numpy(), label=label.cpu().numpy(), type_pred=type_preds.cpu().numpy(), type_label=label[..., 1].long().cpu().numpy(), metal_positions=info.metal_positions.cpu().numpy(), metal_types=info.metal_types.cpu().numpy(), grid_positions=info.grids_positions.cpu().numpy())
+        
+        dm = self.trainer.datamodule
+        base_dir = Path(dm.dl_test_result_dir)
+        base_dir.mkdir(parents=True, exist_ok=True)
+
+        # 2) PDB ID 별 하위 디렉터리 또는 파일 패스 결정
+        pdb_id = info.pdb_id[0]  # e.g. '1abc'
+        out_path = base_dir / f"test_{pdb_id}.npz"
+        print('SAVE ',out_path)
+        # 3) 결과 저장
+        np.savez(
+            out_path,
+            pred=preds.cpu().numpy(),
+            label=label.cpu().numpy(),
+            type_pred=type_preds.cpu().numpy(),
+            type_label=label[..., 1].long().cpu().numpy(),
+            metal_positions=info.metal_positions.cpu().numpy(),
+            metal_types=info.metal_types.cpu().numpy(),
+            grid_positions=info.grids_positions.cpu().numpy()
+        )
+        
         for i in torch.arange(0.1,1.0,0.1):
             pred_05 = preds.squeeze() > i
             TP = torch.logical_and(label_05, pred_05).sum().item()
@@ -340,6 +361,7 @@ class LigMetDataModule(LightningDataModule):
         train_data_file: str,
         val_data_file: str,
         test_data_file: str,
+        dl_test_result_dir: str,
         preprocessed: dict,
         onthefly: dict,
         train_loader_params: dict,
@@ -355,7 +377,7 @@ class LigMetDataModule(LightningDataModule):
         self.train_data_file = train_data_file
         self.val_data_file = val_data_file
         self.test_data_file = test_data_file
-
+        self.dl_test_result_dir = dl_test_result_dir
         self.preprocessed = preprocessed
         self.onthefly = onthefly
 
@@ -400,6 +422,7 @@ class LigMetDataModule(LightningDataModule):
         print(f"Train file: {self.train_data_file}")
 
     def train_dataloader(self):
+        sampler = WeightedSampler(self.train_dataset, shuffle=True, total_samples=20000)  # DistributedSampler 추가 WeightedSampler
         sampler = WeightedSampler(self.train_dataset, shuffle=True, total_samples=20000)  # DistributedSampler 추가 WeightedSampler
         if isinstance(sampler, torch.utils.data.DistributedSampler):
             print('Sampler: DistributedSampler')
