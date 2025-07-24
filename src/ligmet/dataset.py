@@ -88,9 +88,18 @@ class PreprocessedDataSet(torch.utils.data.Dataset):
         info = Info(
             pdb_id=np.array(pdb_id),
             grids_positions=torch.tensor(grids_after_rf, dtype=torch.float32),
-            metal_positions=torch.tensor(features.metal_positions, dtype=torch.float32) if features.metal_positions else None,
-            metal_types=torch.tensor([metals.index(metal) for metal in features.metal_types]) if features.metal_types else None,
+            metal_positions=(
+            torch.tensor(features.metal_positions, dtype=torch.float32)
+            if features.metal_positions is not None and len(features.metal_positions) > 0
+            else None
+            ),
+            metal_types=(
+            torch.tensor([metals.index(metal) for metal in features.metal_types])
+            if features.metal_types is not None and len(features.metal_types) > 0
+            else None
+            ),
         )
+
         return G, L, info
 
     def neigh_to_bondmask(self, features:Features):
@@ -475,7 +484,7 @@ class PreprocessedDataSet(torch.utils.data.Dataset):
 
         rel_idx = torch.clamp(rel_idx, -32, 32) + 32
         rel_idx[~same_chain] = 64  # special index for inter-chain
-        rel_emb = self.relpos_embedding(rel_idx)  # [E, 8]
+        rel_emb = self.relpos_embedding(rel_idx).detach()  # [E, 8]
 
         # 최종 edge feature
         e_feats = torch.cat([onehot_type, dist_bin, covalent_bond, cos, sin, rel_emb], dim=1)
@@ -491,8 +500,14 @@ class PreprocessedDataSet(torch.utils.data.Dataset):
                 graphs.extend(G)  # 각 샘플의 그래프 리스트를 하나의 리스트로 결합
                 labels.extend(L)  # 각 샘플의 결합된 라벨 리스트를 하나의 리스트로 결합
                 g_pos.append(info.grids_positions)
-                m_pos.append(info.metal_positions if info.metal_positions else torch.Tensor([0,0,0]))
-                m_types.append(info.metal_types if info.metal_types else torch.Tensor([-1]))
+                if info.metal_positions is not None and info.metal_positions.numel() > 0:
+                    m_pos.append(info.metal_positions)
+                else:
+                    m_pos.append(torch.zeros((1, 3), dtype=torch.float32))
+                if info.metal_types is not None and len(info.metal_types) > 0:
+                    m_types.append(info.metal_types)
+                else:
+                    m_types.append(torch.full((1,), -1, dtype=torch.long))
                 pdb_ids.append(info.pdb_id)
         # 배치 그래프와 배치 라벨 생성
         batched_graphs = dgl.batch(graphs)  # shape [B*N]
@@ -504,9 +519,9 @@ class PreprocessedDataSet(torch.utils.data.Dataset):
         pdb_idss = np.array(pdb_ids)
         batched_infos = Info(
             pdb_id=pdb_idss,
-            grids_positions=g_poss,
-            metal_positions=m_poss,
-            metal_types=m_typess,
+            grids_positions=g_poss.detach(),
+            metal_positions=m_poss.detach(),
+            metal_types=m_typess.detach(),
         )
         return batched_graphs, batched_labels, batched_infos
 
