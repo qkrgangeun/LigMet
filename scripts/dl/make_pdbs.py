@@ -59,7 +59,7 @@ def write_pdb_with_grids(
                 atom_idx = start_idx + idx
                 x, y, z = grid_pos
                 outfile.write(
-                    f"HETATM{atom_idx:>5} {metal_type:<3}  GRD A{atom_idx:>4}    "
+                    f"HETATM{atom_idx:>5} {metal_type:<3}  GRD A{atom_idx%10000:>4}    "
                     f"{x:8.3f}{y:8.3f}{z:8.3f}  {grid_pred:.2f}  0.00         {metal_type:>3}\n"
                 )
 
