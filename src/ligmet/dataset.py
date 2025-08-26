@@ -183,34 +183,77 @@ class PreprocessedDataSet(torch.utils.data.Dataset):
         )
         return c_features, True
     
-    def make_label(self, features: Features) -> Union[torch.Tensor, torch.Tensor, torch.Tensor]:
+    def make_label(self, features: Features) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+        # grids: [G, 3]
         grid = np.array(features.grid_positions, dtype=np.float32)
-        grids = torch.from_numpy(grid)
-        num_grids = grids.shape[0]
+        grids = torch.from_numpy(grid)  # CPU float32
+        G = grids.shape[0]
+        device = grids.device
+        background_class = len(metals)  # 마지막 인덱스를 배경으로 사용
 
-        if features.metal_positions is None:
-            label_prob = torch.zeros(num_grids, dtype=torch.float32)
-            label_type = torch.full((num_grids,), len(metals), dtype=torch.long)
-            label_vector = torch.zeros(num_grids, 3, dtype=torch.float32)
+        # metal이 아예 없거나 길이가 0인 경우를 모두 처리
+        no_metal = (
+            features.metal_positions is None
+            or (isinstance(features.metal_positions, np.ndarray) and features.metal_positions.size == 0)
+        )
+
+        if no_metal:
+            label_prob   = torch.zeros(G, dtype=torch.float32, device=device)
+            label_type   = torch.full((G,), background_class, dtype=torch.long, device=device)
+            label_vector = torch.zeros(G, 3, dtype=torch.float32, device=device)
             return label_prob, label_type, label_vector
 
-        metal_pos = torch.from_numpy(features.metal_positions)
-        metal_types = torch.tensor([metals.index(metal) for metal in features.metal_types])
+        # metal_pos: [M, 3], metal_types: [M]
+        metal_pos_np = np.asarray(features.metal_positions, dtype=np.float32)
+        M = metal_pos_np.shape[0]
+        if M == 0:
+            # 방어적: 혹시 위 조건을 통과했더라도 M==0이면 동일 처리
+            label_prob   = torch.zeros(G, dtype=torch.float32, device=device)
+            label_type   = torch.full((G,), background_class, dtype=torch.long, device=device)
+            label_vector = torch.zeros(G, 3, dtype=torch.float32, device=device)
+            return label_prob, label_type, label_vector
 
-        diff = grids.unsqueeze(1) - metal_pos.unsqueeze(0)  # [g, m, 3]
-        dist = torch.sqrt(torch.sum(diff**2, dim=-1)) + self.eps  # [g, m]
+        metal_pos = torch.from_numpy(metal_pos_np).to(device=device)  # float32
+        # metals: List[str] 라고 가정
+        metal_types_idx = torch.tensor([metals.index(m) for m in features.metal_types],
+                                    dtype=torch.long, device=device)  # [M]
 
-        exp_dist = torch.exp(-(dist**2) / self.alpha)
-        label_p, _ = torch.max(exp_dist, dim=-1)
-        label_prob = torch.where(label_p <= 0.1, torch.tensor(0.0, dtype=label_p.dtype, device=label_p.device), label_p)
+        # diff/dist 계산
+        diff = grids.unsqueeze(1) - metal_pos.unsqueeze(0)        # [G, M, 3]
+        # self.eps는 아주 작은 양수여야 함
+        dist = torch.sqrt(torch.sum(diff * diff, dim=-1)).clamp_min(0) + self.eps  # [G, M]
 
-        min_dist, min_idx = torch.min(dist, dim=-1)  # [g,]
-        label_type = torch.where(
-            min_dist <= 2.0, metal_types[min_idx], torch.tensor(len(metals), device=min_idx.device)
-        )
-        label_vector = diff[torch.arange(diff.size(0)), min_idx]
+        # label_prob: exp(-d^2/alpha) 최대값
+        # self.alpha > 0 가정
+        exp_dist = torch.exp(-(dist * dist) / self.alpha)         # [G, M]
+        label_p, _ = exp_dist.max(dim=-1)                         # [G]
+        # 임계값 0.1 이하면 0으로
+        label_prob = torch.where(label_p <= 0.1,
+                                torch.zeros_like(label_p),
+                                label_p)
+
+        # type/vector: 최단 거리 metal 기준
+        min_dist, min_idx = dist.min(dim=-1)                      # [G], [G]
+
+        # 초기값(배경)
+        label_type = torch.full((G,), background_class, dtype=torch.long, device=device)
+        label_vector = torch.zeros(G, 3, dtype=torch.float32, device=device)
+
+        # 유효 그리드만 갱신 (예: 2.0 Å 이내)
+        thr = 2.0
+        valid = min_dist <= thr
+        if valid.any():
+            v_idx = min_idx[valid]                                 # [G_valid]
+            label_type[valid] = metal_types_idx[v_idx]             # 타입
+            label_vector[valid] = diff[valid, v_idx, :]            # 방향 벡터 (정규화 원하면 아래 주석 해제)
+
+            # 정규화가 필요하다면:
+            # vec = diff[valid, v_idx, :]
+            # vec = vec / (vec.norm(dim=-1, keepdim=True) + 1e-8)
+            # label_vector[valid] = vec
 
         return label_prob, label_type, label_vector
+
 
     
     def make_graph(self, features: Features) -> dgl.DGLGraph:
