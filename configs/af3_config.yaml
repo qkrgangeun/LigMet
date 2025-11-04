@@ -4,7 +4,7 @@ data:
   train_data_file: "/home/qkrgangeun/LigMet/code/text/biolip/paper/train_pdbs_filtered.txt"
   val_data_file: "/home/qkrgangeun/LigMet/code/text/biolip/filtered/val_pdbs_filtered.txt"
   test_data_file: "/home/qkrgangeun/LigMet/benchmark/mymodel/af3_testset/chimera_aligned/af3.txt"
-  dl_test_result_dir: "/home/qkrgangeun/LigMet/benchmark/mymodel/af3_testset/chimera_aligned/dl/output"
+  dl_test_result_dir: "/home/qkrgangeun/LigMet/benchmark/mymodel/af3_testset/chimera_aligned/dl/highres"
   preprocessed:
     features_dir: "/home/qkrgangeun/LigMet/benchmark/mymodel/af3_testset/chimera_aligned/dl/features"
     rf_result_dir: "/home/qkrgangeun/LigMet/benchmark/mymodel/af3_testset/chimera_aligned/rf/grid_prob"

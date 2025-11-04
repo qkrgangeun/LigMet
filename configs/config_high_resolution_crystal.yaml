@@ -1,14 +1,14 @@
 seed_everything: 42
 data:
   dataset_type: "preprocessed"
-  train_data_file: "/home/qkrgangeun/LigMet/code/text/biolip/filtered/train_pdbs_chain_1_filtered.txt"
+  train_data_file: "/home/qkrgangeun/LigMet/benchmark/mymodel/af3_testset/chimera_aligned/pdb_le_3A_ids.txt"
   val_data_file: "/home/qkrgangeun/LigMet/code/text/biolip/filtered/val_pdbs_filtered.txt"
   test_data_file: "/home/qkrgangeun/LigMet/data/biolip_backup/pdb/test_pdb_noerror.txt"
-  dl_test_result_dir: "/home/qkrgangeun/LigMet/data/biolip_backup/test/ablation/nonbiological"
+  dl_test_result_dir: "/home/qkrgangeun/LigMet/data/biolip_backup/test/ablation/highres"
   preprocessed:
     features_dir: "/home/qkrgangeun/LigMet/data/biolip/dl/features"
     rf_result_dir: "/home/qkrgangeun/LigMet/data/biolip/rf/grid_prob"
-    metal_dir: "/home/qkrgangeun/LigMet/data/biolip_backup/dl/features"
+    metal_dir: "/home/qkrgangeun/LigMet/data/biolip_backup/metal_label"
     topk: 16
     edge_dist_cutoff: 15
     pocket_dist: 3
@@ -104,12 +104,12 @@ trainer:
     class_path: lightning.pytorch.loggers.WandbLogger
     init_args:
       project: "LigMet"
-      name: "1030_ablation_nonbio2"
+      name: "1016_ablation_highres"
   callbacks:
   - class_path: lightning.pytorch.callbacks.ModelCheckpoint
     init_args:
       dirpath: "checkpoints"
-      filename: "1030_ablation_nonbio2{epoch:02d}"
+      filename: "1016_ablation_highres{epoch:02d}"
       monitor: "val_loss"
       mode: "min"
       save_top_k: 5
