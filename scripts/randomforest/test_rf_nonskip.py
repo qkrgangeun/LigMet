@@ -7,8 +7,7 @@ import os
 from pathlib import Path
 def load_data(pdb_id, label_column='label_2.0'):
     """테스트 데이터 로드 및 전처리"""
-    data_path = f"/home/qkrgangeun/LigMet/data/biolip/rf/features/{pdb_id}.csv.gz"
-    data_path = f"/home/qkrgangeun/LigMet/data/biolip_backup/af2.3/testset_chain1/rl/features/{pdb_id}.csv.gz"
+    data_path = pdb_id
     data = pd.read_csv(data_path, compression='gzip')
     X = data.drop([label_column], axis=1)
     Y = data[label_column]
@@ -18,6 +17,7 @@ def save_predicted_grids(pdb_id, y_pred, output_dir):
     """True로 예측된 grid의 위치를 .xyz 파일로 저장"""
     npz_path = f"/home/qkrgangeun/LigMet/data/biolip/dl/features/{pdb_id}.npz"
     npz_path = f"/home/qkrgangeun/LigMet/data/biolip_backup/af2.3/testset_chain1/dl/features/{pdb_id}.npz"
+    npz_path = "./"
     df = np.load(npz_path)
     grid_positions = df["grid_positions"]
     true_grid_positions = grid_positions[y_pred == 1]
@@ -39,11 +39,12 @@ def save_predicted_grids(pdb_id, y_pred, output_dir):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--model_path", type=str, required=True, default="/home/qkrgangeun/LigMet/data/rf_param/0415_newlabel_chain1", help="Path to the trained model file (.joblib)")
-    parser.add_argument("--test_data", type=str, required=True, help="Single PDB ID (e.g., '1abc')")
+    parser.add_argument("--test_data", type=str, required=True, help="randomforest feature csv path: {pdbid}.csv.gz")
     parser.add_argument("--output_dir", type=str, default='/home/qkrgangeun/LigMet/data/biolip/rf/grid_prob', help="Output directory for prediction")
 
     args = parser.parse_args()
-    pdb_id = args.test_data
+    input_path = args.test_data
+    pdb_id = Path(input_path).with_suffix("").stem
     output_dir = Path(args.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
 
@@ -57,7 +58,7 @@ def main():
     # 모델과 테스트 데이터 로딩
     print("-> Loading model and test data")
     model = load(args.model_path)
-    X_test, Y_test = load_data(pdb_id)
+    X_test, Y_test = load_data(input_path)
 
     # 예측 수행
     y_prob = model.predict_proba(X_test)[:, 1]

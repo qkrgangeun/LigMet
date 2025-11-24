@@ -5,6 +5,13 @@ data:
   val_data_file: "/home/qkrgangeun/LigMet/code/text/biolip/filtered/val_pdbs_filtered.txt"
   test_data_file: "/home/qkrgangeun/LigMet/data/biolip_backup/pdb/test_pdb_noerror.txt"
   dl_test_result_dir: "/home/qkrgangeun/LigMet/data/biolip_backup/test/0724"
+  
+  # Automatic preprocessing configuration
+  prune:
+    enabled: false  # Set to true to enable automatic preprocessing
+    pdb_dir: "/home/qkrgangeun/LigMet/data/biolip/pdb"  # Directory containing PDB files
+    skip_existing: true  # Skip if preprocessed files already exist
+  
   preprocessed:
     features_dir: "/home/qkrgangeun/LigMet/data/biolip/dl/features"
     rf_result_dir: "/home/qkrgangeun/LigMet/data/biolip/rf/grid_prob"

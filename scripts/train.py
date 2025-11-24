@@ -1,10 +1,10 @@
 from lightning.pytorch.cli import LightningCLI  # type: ignore
-from ligmet.pl import LigMetModel, LigMetDataModule  # type: ignore
+from ligmet.pl import LigMetTestModule, LigMetTestDataModule  # type: ignore
 
 def main():
     cli = LightningCLI(
-        LigMetModel, 
-        LigMetDataModule,
+        LigMetTestModule, 
+        LigMetTestDataModule,
         save_config_kwargs={"overwrite": True}
     )
 

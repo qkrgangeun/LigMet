@@ -1,0 +1,17 @@
+{
+    "version": "0.2.0",
+    "inputs": [],
+    "compounds": [],
+    "configurations": [
+        {
+            "name": "Attach debug",
+            "justMyCode": false,
+            "request": "attach",
+            "type": "debugpy",
+            "connect": {
+                "host": "nova004",
+                "port": 23296
+            }
+        },
+    ],
+}

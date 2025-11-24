@@ -6,14 +6,16 @@ from ligmet.utils.grid import * # type: ignore
 from dataclasses import asdict
 import traceback
 import argparse
-# 입력 및 출력 디렉토리 설정
-pdb_dir = Path('/home/qkrgangeun/LigMet/data/biolip/pdb')  # PDB 파일이 있는 디렉토리
-output_dir = Path('/home/qkrgangeun/LigMet/data/biolip/dl/features')  # .npz 저장할 디렉토리
-#metalpred
-# pdb_dir = Path('/home/qkrgangeun/MetalPred/data/biolip_group/latest')  # PDB 파일이 있는 디렉토리
-# output_dir = Path('/home/qkrgangeun/LigMet/data/metalpred/dl/features')  
-
-output_dir.mkdir(parents=True, exist_ok=True)  # 저장 폴더 생성 (없으면 생성)
+# # 입력 및 출력 디렉토리 설정
+# pdb_dir = Path('/home/qkrgangeun/LigMet/data/biolip/pdb')  # PDB 파일이 있는 디렉토리
+# output_dir = Path('/home/qkrgangeun/LigMet/data/biolip/dl/features')  # .npz 저장할 디렉토리
+# #metalpred
+# # pdb_dir = Path('/home/qkrgangeun/MetalPred/data/biolip_group/latest')  # PDB 파일이 있는 디렉토리
+# # output_dir = Path('/home/qkrgangeun/LigMet/data/metalpred/dl/features')  
+# #af3
+# pdb_dir = Path('/home/qkrgangeun/LigMet/data/biolip_backup/test')
+# output_dir = Path('/home/qkrgangeun/LigMet/data/biolip_backup/test')
+# output_dir.mkdir(parents=True, exist_ok=True)  # 저장 폴더 생성 (없으면 생성)
 
 def bondmask_to_neighidx(bond_mask: np.ndarray):
     rows, cols = np.where(np.triu(bond_mask) > 0)
@@ -41,13 +43,14 @@ def optimize_dtype(key, arr):
 
     return arr  # 그대로
 
-def process_pdb(pdb_id):
+def process_pdb(pdb_path , output_dir):
     """ 개별 PDB 파일을 처리하고 .npz로 저장하는 함수 """
-    pdb_path = pdb_dir / f"{pdb_id}.pdb"
-    output_npz_path = output_dir / f"{pdb_path.stem}.npz"
-    if output_npz_path.exists():
-        print(f"already exit Skip: {pdb_path.name}")
-        return
+    pdb_path = Path(pdb_path)
+    pdb_id = pdb_path.stem
+    output_npz_path = f"{output_dir}/{pdb_id}.npz"
+    # if output_npz_path.exists():
+    #     print(f"already exit Skip: {pdb_path.name}")
+    #     return
     try:
         print(f"📂 Processing: {pdb_path.name}")
 
@@ -92,8 +95,10 @@ def process_pdb(pdb_id):
 # 병렬 처리 실행
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument('pdb_id', type=str )
+    parser.add_argument('pdb_path', type=str )
+    parser.add_argument('--output_dir', type=str, default='.') 
     args = parser.parse_args()
-    pdb_id = args.pdb_id
-    process_pdb(pdb_id)
+    pdb_path = args.pdb_path
+    output_dir = args.output_dir
+    process_pdb(pdb_path, output_dir)
 
