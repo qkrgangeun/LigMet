@@ -1,11 +1,11 @@
 seed_everything: 42
 
 data:
-  test_data_file: "/home/qkrgangeun/LigMet/data/biolip_backup/test/8b2s/af3_close/af3_close.txt"
-  dl_test_result_dir: "/home/qkrgangeun/LigMet/data/biolip_backup/test/8b2s/af3_close/dl/output"
+  test_data_file: "/home/qkrgangeun/LigMet/benchmark/af3/pdb/pdb.txt"
+  dl_test_result_dir: "/home/qkrgangeun/LigMet/data/biolip_backup/test/1125_boltz1"
 
   onthefly:
-    pdb_dir: "/home/qkrgangeun/LigMet/data/biolip_backup/test/8b2s/af3_close/pdb"
+    pdb_dir: "/home/qkrgangeun/LigMet/benchmark/af3/pdb"
     rf_model_path: "/home/qkrgangeun/LigMet/data/rf_param/0415_newlabel_chain1"  # ← 이름 확인!
     topk: 16
     edge_dist_cutoff: 15
