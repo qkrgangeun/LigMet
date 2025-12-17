@@ -1,8 +1,8 @@
 seed_everything: 42
 
 data:
-  test_data_file: "/home/qkrgangeun/LigMet/8h0l.txt"
-  dl_test_result_dir: "/home/qkrgangeun/LigMet/8h0l"
+  test_data_file: "/home/qkrgangeun/LigMet/data/biolip_backup/pdb/test_pdb_noerror.txt"
+  dl_test_result_dir: "/home/qkrgangeun/LigMet/data/biolip_backup/test/ablation/norf"
 
   onthefly:
     pdb_dir: "/home/qkrgangeun/LigMet/data/biolip_backup/pdb"
@@ -10,7 +10,7 @@ data:
     topk: 16
     edge_dist_cutoff: 15
     pocket_dist: 3
-    rf_threshold: 0.5
+    rf_threshold: -0.1
 
   test_loader_params:
     batch_size: 1
