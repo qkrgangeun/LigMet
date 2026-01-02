@@ -9,7 +9,7 @@
             "request": "attach",
             "type": "debugpy",
             "connect": {
-                "host": "nova004",
+                "host": "galaxy3",
                 "port": 23296
             }
         },

@@ -1,7 +1,7 @@
 seed_everything: 42
 
 data:
-  test_data_file: "/home/qkrgangeun/LigMet/data/biolip_backup/pdb/test_pdb_noerror.txt"
+  test_data_file: "/home/qkrgangeun/LigMet/sh/inference_time/1a0b.txt"
   dl_test_result_dir: "/home/qkrgangeun/LigMet/data/biolip_backup/test/inference_time"
 
   onthefly:
