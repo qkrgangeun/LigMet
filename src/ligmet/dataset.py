@@ -363,7 +363,8 @@ class OnTheFlyDataSet(torch.utils.data.Dataset):
         sasas = sasas + self.eps
 
         # 모든 feature 합치기
-        n_feats = torch.cat([aatype, atomtype, atom_chemtype, sec_structs, sasas, qs, node_type], dim=1)
+        # n_feats = torch.cat([aatype, atomtype, atom_chemtype, sec_structs, sasas, qs, node_type], dim=1)
+        n_feats = torch.cat([aatype, atomtype, atom_chemtype, sec_structs, qs, node_type], dim=1)
         n_feats = torch.nan_to_num(n_feats, nan=0.0, posinf=0.0, neginf=0.0)
 
         # Polarity vector 처리

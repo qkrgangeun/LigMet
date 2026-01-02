@@ -12,7 +12,6 @@ from torch.utils.data import DataLoader, DistributedSampler
 from ligmet.dataset import OnTheFlyDataSet
 from ligmet.utils.constants import metals,metal_counts_focus, metal_counts
 from sklearn.cluster import DBSCAN
-import time
 class LigMetTestModule(LightningModule):
     def __init__(self, model: Type[nn.Module], model_config: dict):
         super().__init__()
@@ -69,7 +68,7 @@ class LigMetTestModule(LightningModule):
         return loss, logs
     
     def dbscan_clustering_weighted(self, coords: np.ndarray, pred: np.ndarray, type_pred: np.ndarray,
-                                eps: float=2.0, min_samples: int=1) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+                                eps: float=2.0, min_samples: int=2) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
         """Return DBSCAN cluster centers and pred-weighted type scores."""
         if len(coords) == 0:
             return np.empty((0,3)), np.empty((0,1)), np.empty((0, type_pred.shape[1]))
@@ -105,16 +104,8 @@ class LigMetTestModule(LightningModule):
         return
     @torch.no_grad()
     def test_step(self, batch, batch_idx):
-        # 전체 inference time 측정 (batch 준비 포함)
-        batch_start = time.time()
         G, label, info = batch
-        batch_time = time.time() - batch_start
-        
-        # Forward pass 측정
-        forward_start = time.time()
         pred, type_pred, bin_pred = self(G.to(self.device))
-        forward_time = time.time() - forward_start
-
         grididx = torch.where(G.ndata["grid_mask"] > 0)[0]
         preds, type_preds, bin_preds = pred[grididx], type_pred[grididx], bin_pred[grididx]
         total_loss, logs = self.compute_loss(preds, label, type_preds, bin_preds)
@@ -134,7 +125,6 @@ class LigMetTestModule(LightningModule):
         print('SAVE ',out_path)
         
         # 3) 결과 저장
-        save_start = time.time()
         np.savez(
             out_path,
             pred=preds.cpu().numpy(),
@@ -145,29 +135,12 @@ class LigMetTestModule(LightningModule):
             metal_types=info.metal_types.cpu().numpy(),
             grid_positions=info.grids_positions.cpu().numpy()
         )
-        save_time = time.time() - save_start
-        
-        # Post-processing (clustering + PDB generation)
-        post_start = time.time()
         mask = preds > self.dl_threshold
         position_selected = info.grids_positions[mask].cpu().numpy()
         pred_selected = preds[mask].cpu().numpy()
         type_selected = type_preds[mask].cpu().numpy()
         centers, occup_scores, type_scores = self.dbscan_clustering_weighted(position_selected, pred_selected, type_selected)
         self.grid2pdb(centers, occup_scores, type_scores, base_dir / f"test_{pdb_id}.pdb")
-        post_time = time.time() - post_start
-        
-        # 전체 시간
-        total_time = batch_time + forward_time + save_time + post_time
-        
-        print("="*60)
-        print(f"INFERENCE TIME BREAKDOWN for {pdb_id}:")
-        print(f"  Batch preparation (feature generation): {batch_time:.4f}s")
-        print(f"  Forward pass (model inference):         {forward_time:.4f}s")
-        print(f"  Result saving (NPZ):                    {save_time:.4f}s")
-        print(f"  Post-processing (DBSCAN + PDB):         {post_time:.4f}s")
-        print(f"  TOTAL INFERENCE TIME:                   {total_time:.4f}s")
-        print("="*60)
         return
 
 

@@ -1,8 +1,8 @@
 seed_everything: 42
 
 data:
-  test_data_file: "/home/qkrgangeun/LigMet/sh/inference_time/8y4u.txt"
-  dl_test_result_dir: "/home/qkrgangeun/LigMet/data/biolip_backup/test/inference_time"
+  test_data_file: "/home/qkrgangeun/LigMet/data/biolip_backup/pdb/test_pdb_noerror.txt"
+  dl_test_result_dir: "/home/qkrgangeun/LigMet/data/biolip_backup/test/ablation/sasa"
 
   onthefly:
     pdb_dir: "/home/qkrgangeun/LigMet/data/biolip_backup/pdb"
@@ -23,7 +23,7 @@ model:
   model: "ligmet.models.Model"
   model_config:
     encoder_args:
-      input_dim: 230 
+      input_dim: 229 
       hidden_dim: 64
       dropout_rate: 0.1
       output_dim: 32
