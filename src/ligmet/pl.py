@@ -36,7 +36,7 @@ class LigMetTestModule(LightningModule):
             "CE": torch.nn.CrossEntropyLoss(weight=self.metal_weight),#weight=self.metal_weight
             "CEfocus": torch.nn.CrossEntropyLoss(weight=self.metal_weight_focus),#weight=self.metal_weight_focus
         })
-        self.dl_threshold = 0.5  
+        self.dl_threshold = 0.1
         
     def forward(self, G):
         # 모델이 (prob_logits, type_logits, bin_logits) 형태를 반환한다는 기존 가정 유지
@@ -67,25 +67,51 @@ class LigMetTestModule(LightningModule):
 
         return loss, logs
     
-    def dbscan_clustering_weighted(self, coords: np.ndarray, pred: np.ndarray, type_pred: np.ndarray,
-                                eps: float=2.0, min_samples: int=2) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+    def dbscan_clustering_weighted(
+        self,
+        coords: np.ndarray,
+        pred: np.ndarray,
+        type_pred: np.ndarray,
+        eps: float = 2.0,
+        min_samples: int = 2
+    ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
         """Return DBSCAN cluster centers and pred-weighted type scores."""
+        
         if len(coords) == 0:
-            return np.empty((0,3)), np.empty((0,1)), np.empty((0, type_pred.shape[1]))
+            return (
+                np.empty((0, 3)),
+                np.empty((0, 1)),
+                np.empty((0, type_pred.shape[1])),
+            )
+
         db = DBSCAN(eps=eps, min_samples=min_samples).fit(coords)
         labels = db.labels_
+
         centers, scores, t_scores = [], [], []
+
         for lab in set(labels):
-            if lab == -1: 
+            if lab == -1:
                 continue
+
             idx = np.where(labels == lab)[0]
             w = pred[idx]
-            centers.append(np.average(coords[idx], axis=0, weights=w))
-            scores.append(np.max(pred[idx]))
-            t_scores.append(np.average(type_pred[idx], axis=0, weights=w))
+
+            centers.append(np.average(coords[idx], axis=0, weights=w))          # (3,)
+            scores.append(np.max(pred[idx]))                                     # scalar
+            t_scores.append(np.average(type_pred[idx], axis=0, weights=w))       # (T,)
+
         if len(centers) == 0:
-            return np.empty((0,3)), np.empty((0, type_pred.shape[1]))
-        return np.vstack(centers), np.vstack(scores), np.vstack(t_scores)
+            return (
+                np.empty((0, 3)),
+                np.empty((0, 1)),
+                np.empty((0, type_pred.shape[1])),
+            )
+
+        return (
+            np.vstack(centers),
+            np.array(scores)[:, None],
+            np.vstack(t_scores),
+        )
     
     def grid2pdb(self, grid_positions: np.ndarray, probs: np.ndarray, types: np.ndarray, output_pdb_path: Path):
         """Save predicted grids to a PDB file."""

@@ -80,8 +80,11 @@ class OnTheFlyDataSet(torch.utils.data.Dataset):
         dl_feat.grid_positions = grids_after_rf
 
         g = self.make_graph(dl_feat)
-        l_prob, l_type, l_vector = self.make_label(dl_feat)
-        labels = torch.cat([l_prob.unsqueeze(1), l_type.unsqueeze(1), l_vector], dim=1)  # shape [N,5]
+        if dl_feat.metal_positions is not None:
+            l_prob, l_type, l_vector = self.make_label(dl_feat)
+            labels = torch.cat([l_prob.unsqueeze(1), l_type.unsqueeze(1), l_vector], dim=1) # shape [N,5]
+        else:
+            labels = torch.zeros((len(grids_after_rf), 5), dtype=torch.float32) # shape [N,5]
         G.append(g)
         L.append(labels)
         if not G:
@@ -363,8 +366,8 @@ class OnTheFlyDataSet(torch.utils.data.Dataset):
         sasas = sasas + self.eps
 
         # 모든 feature 합치기
-        # n_feats = torch.cat([aatype, atomtype, atom_chemtype, sec_structs, sasas, qs, node_type], dim=1)
-        n_feats = torch.cat([aatype, atomtype, atom_chemtype, sec_structs, qs, node_type], dim=1)
+        n_feats = torch.cat([aatype, atomtype, atom_chemtype, sec_structs, sasas, qs, node_type], dim=1)
+        # n_feats = torch.cat([aatype, atomtype, atom_chemtype, sec_structs, qs, node_type], dim=1)
         n_feats = torch.nan_to_num(n_feats, nan=0.0, posinf=0.0, neginf=0.0)
 
         # Polarity vector 처리

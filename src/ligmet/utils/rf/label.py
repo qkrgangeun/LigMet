@@ -9,9 +9,10 @@ def label_grids(metal_coords: np.ndarray,
     t:            cutoff distance  
     """
     # metal_coords가 비어 있으면 모두 False 반환
-    if metal_coords.size == 0:
+    if metal_coords is None:
         return np.zeros(grid_coords.shape[0], dtype=bool)
-
+    elif metal_coords.size == 0:
+        return np.zeros(grid_coords.shape[0], dtype=bool)
     # (N,1,3) - (1,M,3) → (N,M,3)
     dists = np.linalg.norm(grid_coords[:, None, :] - metal_coords[None, :, :], axis=-1)
     # 각 grid에 대해 가장 가까운 metal 거리
