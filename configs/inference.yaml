@@ -2,7 +2,7 @@ seed_everything: 42
 
 data:
   test_data_file: "/home/qkrgangeun/LigMet/data/biolip_backup/pdb/test_pdb_noerror.txt"
-  dl_test_result_dir: "/home/qkrgangeun/LigMet/data/biolip_backup/test/inference_time"
+  dl_test_result_dir: "/home/qkrgangeun/LigMet/data/biolip_backup/test/rf_03"
 
   onthefly:
     pdb_dir: "/home/qkrgangeun/LigMet/data/biolip_backup/pdb"
