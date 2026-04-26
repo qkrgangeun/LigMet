@@ -22,6 +22,7 @@ from sklearn.metrics import (
 )
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
+from sklearn.neural_network import MLPClassifier
 from sklearn.svm import SVC
 from tqdm import tqdm
 
@@ -149,15 +150,30 @@ def load_test_dataset(
     )
 
 
-def build_model(*, model_type: str, random_state: int, svm_c: float, svm_kernel: str, svm_gamma: str) -> Any:
+def build_model(
+    *,
+    model_type: str,
+    random_state: int,
+    svm_c: float,
+    svm_kernel: str,
+    svm_gamma: str,
+    mlp_hidden_layers: tuple[int, int, int],
+    mlp_alpha: float,
+    mlp_learning_rate_init: float,
+    mlp_max_iter: int,
+) -> Any:
     """Build a model instance for training.
 
     Args:
-        model_type: One of lightgbm or svm.
+        model_type: One of lightgbm, svm, or mlp.
         random_state: Random seed.
         svm_c: SVM C value.
         svm_kernel: SVM kernel type.
         svm_gamma: SVM gamma value.
+        mlp_hidden_layers: Three hidden layer sizes for the MLP.
+        mlp_alpha: L2 regularization strength.
+        mlp_learning_rate_init: Initial learning rate.
+        mlp_max_iter: Maximum training iterations.
 
     Returns:
         Initialized model object.
@@ -195,6 +211,31 @@ def build_model(*, model_type: str, random_state: int, svm_c: float, svm_kernel:
                         class_weight="balanced",
                         probability=True,
                         random_state=random_state,
+                    ),
+                ),
+            ]
+        )
+
+    if model_type == "mlp":
+        return Pipeline(
+            steps=[
+                ("scaler", StandardScaler()),
+                (
+                    "mlp",
+                    MLPClassifier(
+                        hidden_layer_sizes=mlp_hidden_layers,
+                        activation="relu",
+                        solver="adam",
+                        alpha=mlp_alpha,
+                        batch_size="auto",
+                        learning_rate="adaptive",
+                        learning_rate_init=mlp_learning_rate_init,
+                        max_iter=mlp_max_iter,
+                        early_stopping=True,
+                        validation_fraction=0.1,
+                        n_iter_no_change=20,
+                        random_state=random_state,
+                        verbose=False,
                     ),
                 ),
             ]
@@ -290,6 +331,10 @@ def run_single_model(args: argparse.Namespace, *, model_type: str) -> None:
         svm_c=args.svm_c,
         svm_kernel=args.svm_kernel,
         svm_gamma=args.svm_gamma,
+        mlp_hidden_layers=tuple(args.mlp_hidden_layers),
+        mlp_alpha=args.mlp_alpha,
+        mlp_learning_rate_init=args.mlp_learning_rate_init,
+        mlp_max_iter=args.mlp_max_iter,
     )
 
     model_file = args.model_out_dir / f"{model_type}_{args.model_name}.joblib"
@@ -345,7 +390,7 @@ def parse_args() -> argparse.Namespace:
         description="Train/evaluate LightGBM and SVM with existing LigMet RF feature CSV.GZ files."
     )
     parser.add_argument("--mode", type=str, default="train_test", choices=["train", "test", "train_test"])
-    parser.add_argument("--model_type", type=str, default="all", choices=["lightgbm", "svm", "all"])
+    parser.add_argument("--model_type", type=str, default="all", choices=["lightgbm", "svm", "mlp", "all"])
     parser.add_argument("--model_name", type=str, default="baseline")
 
     parser.add_argument(
@@ -381,6 +426,16 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--svm_c", type=float, default=1.0)
     parser.add_argument("--svm_kernel", type=str, default="rbf", choices=["linear", "rbf", "poly", "sigmoid"])
     parser.add_argument("--svm_gamma", type=str, default="scale")
+    parser.add_argument(
+        "--mlp_hidden_layers",
+        type=int,
+        nargs=3,
+        default=[128, 64, 32],
+        help="Three hidden layer sizes for the MLP.",
+    )
+    parser.add_argument("--mlp_alpha", type=float, default=1e-4)
+    parser.add_argument("--mlp_learning_rate_init", type=float, default=1e-3)
+    parser.add_argument("--mlp_max_iter", type=int, default=300)
 
     parser.add_argument(
         "--model_out_dir",
