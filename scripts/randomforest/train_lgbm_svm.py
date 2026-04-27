@@ -161,6 +161,7 @@ def build_model(
     mlp_alpha: float,
     mlp_learning_rate_init: float,
     mlp_max_iter: int,
+    mlp_verbose: bool,
 ) -> Any:
     """Build a model instance for training.
 
@@ -174,6 +175,7 @@ def build_model(
         mlp_alpha: L2 regularization strength.
         mlp_learning_rate_init: Initial learning rate.
         mlp_max_iter: Maximum training iterations.
+        mlp_verbose: Whether to print per-iteration MLP training progress.
 
     Returns:
         Initialized model object.
@@ -235,7 +237,7 @@ def build_model(
                         validation_fraction=0.1,
                         n_iter_no_change=20,
                         random_state=random_state,
-                        verbose=False,
+                        verbose=mlp_verbose,
                     ),
                 ),
             ]
@@ -335,6 +337,7 @@ def run_single_model(args: argparse.Namespace, *, model_type: str) -> None:
         mlp_alpha=args.mlp_alpha,
         mlp_learning_rate_init=args.mlp_learning_rate_init,
         mlp_max_iter=args.mlp_max_iter,
+        mlp_verbose=args.mlp_verbose,
     )
 
     model_file = args.model_out_dir / f"{model_type}_{args.model_name}.joblib"
@@ -435,7 +438,12 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--mlp_alpha", type=float, default=1e-4)
     parser.add_argument("--mlp_learning_rate_init", type=float, default=1e-3)
-    parser.add_argument("--mlp_max_iter", type=int, default=300)
+    parser.add_argument("--mlp_max_iter", type=int, default=200)
+    parser.add_argument(
+        "--mlp_verbose",
+        action="store_true",
+        help="Print per-iteration MLP training progress.",
+    )
 
     parser.add_argument(
         "--model_out_dir",
