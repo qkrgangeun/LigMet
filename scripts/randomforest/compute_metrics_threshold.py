@@ -73,7 +73,7 @@ def init_counts(*, thresholds: list[float]) -> RunningCounts:
     )
 
 
-def build_lgbm_probability(
+def build_model_probability(
     *,
     model,
     feature_frame: pd.DataFrame,
@@ -91,6 +91,16 @@ def build_lgbm_probability(
     """
     features = feature_frame.drop(columns=[label_column])
     return model.predict_proba(features)[:, 1]
+
+
+def build_lgbm_probability(
+    *,
+    model,
+    feature_frame: pd.DataFrame,
+    label_column: str,
+) -> np.ndarray:
+    """Backward-compatible wrapper for LightGBM-like models."""
+    return build_model_probability(model=model, feature_frame=feature_frame, label_column=label_column)
 
 
 def load_rf_probability(*, rf_prob_dir: Path, pdb_id: str) -> np.ndarray | None:
@@ -213,6 +223,11 @@ def parse_args() -> argparse.Namespace:
         default=Path("/home/qkrgangeun/LigMet/data/rf_param/lightgbm_revision.joblib"),
     )
     parser.add_argument(
+        "--mlp_model_path",
+        type=Path,
+        default=Path("/home/qkrgangeun/LigMet/data/rf_param/mlp_baseline.joblib"),
+    )
+    parser.add_argument(
         "--test_pdb_list",
         type=Path,
         default=Path("/home/qkrgangeun/LigMet/data/biolip_backup/pdb/test_pdb_noerror.txt"),
@@ -235,9 +250,17 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--label_column", type=str, default="label_2.0")
     parser.add_argument("--thresholds", type=float, nargs="+", default=[0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9])
     parser.add_argument(
+        "--models",
+        type=str,
+        nargs="+",
+        choices=["rf", "lgbm", "mlp"],
+        default=["rf", "lgbm", "mlp"],
+        help="Select which models to evaluate. Use only 'mlp' to test the MLP joblib.",
+    )
+    parser.add_argument(
         "--output_csv",
         type=Path,
-        default=Path("/home/qkrgangeun/LigMet/data/rf_param/metrics/threshold_comparison_metrics.csv"),
+        default=Path("/home/qkrgangeun/LigMet/data/rf_param/metrics/threshold_comparison_metrics2.csv"),
     )
     parser.add_argument("--verbose", action="store_true")
     return parser.parse_args()
@@ -250,11 +273,14 @@ def main() -> None:
 
     thresholds = sorted(args.thresholds)
     pdb_ids = read_pdb_list(list_path=args.test_pdb_list)
+    selected_models = set(args.models)
 
-    lgbm_model = load(args.lgbm_model_path)
+    lgbm_model = load(args.lgbm_model_path) if "lgbm" in selected_models else None
+    mlp_model = load(args.mlp_model_path) if "mlp" in selected_models else None
 
-    rf_counts = init_counts(thresholds=thresholds)
-    lgbm_counts = init_counts(thresholds=thresholds)
+    rf_counts = init_counts(thresholds=thresholds) if "rf" in selected_models else None
+    lgbm_counts = init_counts(thresholds=thresholds) if "lgbm" in selected_models else None
+    mlp_counts = init_counts(thresholds=thresholds) if "mlp" in selected_models else None
 
     missing_rf_prob_count = 0
     skipped_pdb_count = 0
@@ -274,19 +300,34 @@ def main() -> None:
             continue
 
         labels = frame[args.label_column].to_numpy(dtype=int)
-        lgbm_prob = build_lgbm_probability(
-            model=lgbm_model,
-            feature_frame=frame,
-            label_column=args.label_column,
-        )
+        rf_prob = None
+        lgbm_prob = None
+        mlp_prob = None
 
-        rf_prob = load_rf_probability(
-            rf_prob_dir=args.rf_prob_dir,
-            pdb_id=pdb_id,
-        )
-        if rf_prob is None:
-            missing_rf_prob_count += 1
-            continue
+        if "rf" in selected_models:
+            rf_prob = load_rf_probability(
+                rf_prob_dir=args.rf_prob_dir,
+                pdb_id=pdb_id,
+            )
+            if rf_prob is None:
+                missing_rf_prob_count += 1
+                continue
+
+        if "lgbm" in selected_models:
+            assert lgbm_model is not None
+            lgbm_prob = build_lgbm_probability(
+                model=lgbm_model,
+                feature_frame=frame,
+                label_column=args.label_column,
+            )
+
+        if "mlp" in selected_models:
+            assert mlp_model is not None
+            mlp_prob = build_model_probability(
+                model=mlp_model,
+                feature_frame=frame,
+                label_column=args.label_column,
+            )
 
         dl_data = np.load(dl_npz_path)
         metal_data = np.load(metal_label_npz_path)
@@ -297,47 +338,67 @@ def main() -> None:
         grid_positions = np.asarray(dl_data["grid_positions"])
         metal_positions = np.asarray(metal_data["metal_positions"])
 
-        n = min(len(labels), len(grid_positions), len(rf_prob), len(lgbm_prob))
+        lengths = [len(labels), len(grid_positions)]
+        if rf_prob is not None:
+            lengths.append(len(rf_prob))
+        if lgbm_prob is not None:
+            lengths.append(len(lgbm_prob))
+        if mlp_prob is not None:
+            lengths.append(len(mlp_prob))
+
+        n = min(lengths)
         if n == 0:
             skipped_pdb_count += 1
             continue
 
-        if n != len(labels) or n != len(grid_positions) or n != len(rf_prob) or n != len(lgbm_prob):
-            logging.debug(
-                "Length mismatch for %s: labels=%d grid=%d rf=%d lgbm=%d, using n=%d",
-                pdb_id,
-                len(labels),
-                len(grid_positions),
-                len(rf_prob),
-                len(lgbm_prob),
-                n,
-            )
+        mismatch_parts = [f"labels={len(labels)}", f"grid={len(grid_positions)}"]
+        if rf_prob is not None:
+            mismatch_parts.append(f"rf={len(rf_prob)}")
+        if lgbm_prob is not None:
+            mismatch_parts.append(f"lgbm={len(lgbm_prob)}")
+        if mlp_prob is not None:
+            mismatch_parts.append(f"mlp={len(mlp_prob)}")
+
+        if any(length != n for length in lengths):
+            logging.debug("Length mismatch for %s: %s, using n=%d", pdb_id, " ".join(mismatch_parts), n)
 
         labels_n = labels[:n]
         grid_positions_n = grid_positions[:n]
-        rf_prob_n = rf_prob[:n]
-        lgbm_prob_n = lgbm_prob[:n]
-
-        apply_threshold_metrics(
-            counts=rf_counts,
-            thresholds=thresholds,
-            probabilities=rf_prob_n,
-            labels=labels_n,
-            grid_positions=grid_positions_n,
-            metal_positions=metal_positions,
-        )
-        apply_threshold_metrics(
-            counts=lgbm_counts,
-            thresholds=thresholds,
-            probabilities=lgbm_prob_n,
-            labels=labels_n,
-            grid_positions=grid_positions_n,
-            metal_positions=metal_positions,
-        )
+        if rf_prob is not None and rf_counts is not None:
+            apply_threshold_metrics(
+                counts=rf_counts,
+                thresholds=thresholds,
+                probabilities=rf_prob[:n],
+                labels=labels_n,
+                grid_positions=grid_positions_n,
+                metal_positions=metal_positions,
+            )
+        if lgbm_prob is not None and lgbm_counts is not None:
+            apply_threshold_metrics(
+                counts=lgbm_counts,
+                thresholds=thresholds,
+                probabilities=lgbm_prob[:n],
+                labels=labels_n,
+                grid_positions=grid_positions_n,
+                metal_positions=metal_positions,
+            )
+        if mlp_prob is not None and mlp_counts is not None:
+            apply_threshold_metrics(
+                counts=mlp_counts,
+                thresholds=thresholds,
+                probabilities=mlp_prob[:n],
+                labels=labels_n,
+                grid_positions=grid_positions_n,
+                metal_positions=metal_positions,
+            )
 
     rows = []
-    rows.extend(finalize_result_rows(model_name="RandomForest", thresholds=thresholds, counts=rf_counts))
-    rows.extend(finalize_result_rows(model_name="LightGBM", thresholds=thresholds, counts=lgbm_counts))
+    if rf_counts is not None:
+        rows.extend(finalize_result_rows(model_name="RandomForest", thresholds=thresholds, counts=rf_counts))
+    if lgbm_counts is not None:
+        rows.extend(finalize_result_rows(model_name="LightGBM", thresholds=thresholds, counts=lgbm_counts))
+    if mlp_counts is not None:
+        rows.extend(finalize_result_rows(model_name="MLP", thresholds=thresholds, counts=mlp_counts))
 
     result_frame = pd.DataFrame(rows)
     args.output_csv.parent.mkdir(parents=True, exist_ok=True)
