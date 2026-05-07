@@ -1,4 +1,4 @@
-name: se3_113
+name: promet
 channels:
   - pytorch
   - dglteam

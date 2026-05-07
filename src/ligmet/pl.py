@@ -16,7 +16,10 @@ class LigMetTestModule(LightningModule):
     def __init__(self, model: Type[nn.Module], model_config: dict):
         super().__init__()
         self.save_hyperparameters()
-        
+
+        model_config = dict(model_config)
+        self.dl_threshold = model_config.pop("dl_threshold", 0.5)
+
         self.model = model(**model_config)
         
         self.register_buffer(
@@ -36,7 +39,6 @@ class LigMetTestModule(LightningModule):
             "CE": torch.nn.CrossEntropyLoss(weight=self.metal_weight),#weight=self.metal_weight
             "CEfocus": torch.nn.CrossEntropyLoss(weight=self.metal_weight_focus),#weight=self.metal_weight_focus
         })
-        self.dl_threshold = 0.1
         
     def forward(self, G):
         # 모델이 (prob_logits, type_logits, bin_logits) 형태를 반환한다는 기존 가정 유지
@@ -136,10 +138,10 @@ class LigMetTestModule(LightningModule):
         preds, type_preds, bin_preds = pred[grididx], type_pred[grididx], bin_pred[grididx]
         total_loss, logs = self.compute_loss(preds, label, type_preds, bin_preds)
         preds = torch.sigmoid(preds.squeeze())
-        label_05 = label[..., 0] > 0.5
-        print('target:',info.pdb_id, info.metal_types)
-        print('label',label_05)
-        print('pred',preds)
+        # label_05 = label[..., 0] > 0.5
+        # print('target:',info.pdb_id, info.metal_types)
+        # print('label',label_05)
+        # print('pred',preds)
 
         dm = self.trainer.datamodule
         base_dir = Path(dm.dl_test_result_dir)
@@ -148,7 +150,7 @@ class LigMetTestModule(LightningModule):
         # 2) PDB ID 별 하위 디렉터리 또는 파일 패스 결정
         pdb_id = info.pdb_id[0]  # e.g. '1abc'
         out_path = base_dir / f"test_{pdb_id}.npz"
-        print('SAVE ',out_path)
+        print("Predicted grids saved to:",out_path)
         
         # 3) 결과 저장
         np.savez(
@@ -166,7 +168,7 @@ class LigMetTestModule(LightningModule):
         pred_selected = preds[mask].cpu().numpy()
         type_selected = type_preds[mask].cpu().numpy()
         centers, occup_scores, type_scores = self.dbscan_clustering_weighted(position_selected, pred_selected, type_selected)
-        self.grid2pdb(centers, occup_scores, type_scores, base_dir / f"test_{pdb_id}.pdb")
+        self.grid2pdb(centers, occup_scores, type_scores, base_dir / f"promet_{pdb_id}.pdb")
         return
 
 

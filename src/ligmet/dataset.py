@@ -559,7 +559,7 @@ class OnTheFlyDataSet(torch.utils.data.Dataset):
         batched_graphs = dgl.batch(graphs)  # shape [B*N]
         batched_labels = torch.cat(labels, dim=0)  # shape [B*N,2]
         g_poss = torch.cat(g_pos, dim=0)
-        print(m_pos, m_types)
+        # print(m_pos, m_types)
         m_poss = torch.cat(m_pos, dim=0) 
         m_typess = torch.cat(m_types, dim=0) 
         pdb_idss = np.array(pdb_ids)
